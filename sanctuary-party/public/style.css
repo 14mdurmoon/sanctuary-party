@@ -138,6 +138,11 @@ input::placeholder { color: var(--faint); }
   padding: 3px 8px; border-radius: 7px; white-space: nowrap;
 }
 .card .acts { display: flex; gap: 5px; }
+.card.carry {
+  background: linear-gradient(180deg, rgba(226,115,143,.20), rgba(226,115,143,.10));
+  border-color: rgba(226,115,143,.5);
+}
+.card.carry .cn { color: #ffd7df; }
 .icon-btn {
   border: 1px solid var(--line); background: transparent; color: var(--muted);
   width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: .85rem;

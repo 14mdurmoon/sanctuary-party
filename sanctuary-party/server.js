@@ -52,7 +52,7 @@ function getState() {
   const byParty = {};
   const pool = [];
   for (const c of chars) {
-    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className };
+    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className, carry: !!c.carry };
     if (c.partyId && findParty(c.partyId)) (byParty[c.partyId] || (byParty[c.partyId] = [])).push(pub);
     else pool.push(pub);
   }
@@ -148,6 +148,15 @@ app.delete('/api/characters/:id', (req, res) => {
   store.characters = store.characters.filter((x) => x.id !== c.id);
   save(); broadcast();
   res.json({ ok: true });
+});
+
+// toggle "carry" marker (admin only)
+app.post('/api/characters/:id/carry', requireAdmin, (req, res) => {
+  const c = findChar(req.params.id);
+  if (!c) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
+  c.carry = !c.carry;
+  save(); broadcast();
+  res.json({ carry: !!c.carry });
 });
 
 // ---------- parties (admin only) ----------

@@ -41,7 +41,7 @@
     mine.forEach((c) => {
       const p = partyOf(c.id);
       const el = document.createElement('div');
-      el.className = 'card';
+      el.className = 'card' + (c.carry ? ' carry' : '');
       el.innerHTML = `
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
@@ -138,7 +138,7 @@
       if (!n) slots.innerHTML = '<div class="empty-hint">ยังไม่มีสมาชิก</div>';
       else p.members.forEach((m, i) => {
         const row = document.createElement('div');
-        row.className = 'card';
+        row.className = 'card' + (m.carry ? ' carry' : '');
         row.innerHTML = `
           <span class="slot-idx">${i + 1}</span>
           <span class="cls-dot" style="color:${classColor(m.class)}"></span>

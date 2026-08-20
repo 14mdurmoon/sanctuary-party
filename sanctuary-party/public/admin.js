@@ -69,7 +69,7 @@
   // ---------- render ----------
   function charCard(c, idx) {
     const div = document.createElement('div');
-    div.className = 'card drag';
+    div.className = 'card drag' + (c.carry ? ' carry' : '');
     div.dataset.id = c.id;
     div.innerHTML =
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
@@ -241,6 +241,15 @@
         catch (err) { toast(err.message, true); }
       }
     }
+  });
+
+  // right-click a card to toggle "carry" (light red)
+  $('console').addEventListener('contextmenu', async (e) => {
+    const card = e.target.closest('[data-id]');
+    if (!card) return;
+    e.preventDefault();
+    try { await api('POST', '/api/characters/' + card.dataset.id + '/carry', {}, authHeaders()); }
+    catch (err) { toast(err.message, true); }
   });
 
   $('console').addEventListener('change', async (e) => {
