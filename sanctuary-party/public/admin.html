@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sanctuary — แอดมินจัดตี้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg class="sigil" viewBox="0 0 48 48" fill="none">
+        <path d="M24 3 L30 16 L44 18 L34 28 L37 43 L24 35 L11 43 L14 28 L4 18 L18 16 Z"
+              stroke="#e8c26b" stroke-width="1.6" fill="rgba(232,194,107,.08)"/>
+        <path d="M24 11 L27 19 L24 24 L21 19 Z" fill="#63d6ea"/>
+      </svg>
+      <div>
+        <h1>Sanctuary · Admin</h1>
+        <p class="sub">ลากรายชื่อเข้าตี้ให้ครบ 10 คน</p>
+      </div>
+    </div>
+    <nav>
+      <span class="live-dot" id="live"><i></i> live</span>
+      <a class="btn ghost small" href="/">หน้าลงชื่อ</a>
+      <button class="btn ghost small" id="logout" style="display:none">ออก</button>
+    </nav>
+  </header>
+
+  <!-- login -->
+  <section class="panel" id="loginPanel" style="max-width:420px;margin:40px auto">
+    <div class="head"><h2>เข้าสู่ระบบแอดมิน</h2></div>
+    <div class="body">
+      <div class="field">
+        <label for="pw">รหัสผ่านแอดมิน</label>
+        <input id="pw" type="password" placeholder="••••••••" />
+      </div>
+      <button class="btn primary" id="loginBtn" style="width:100%">เข้าสู่ระบบ</button>
+      <p class="hint" style="margin:10px 0 0">ตั้งรหัสผ่านผ่านตัวแปร <code>ADMIN_PASSWORD</code> บน Railway</p>
+    </div>
+  </section>
+
+  <!-- console -->
+  <div id="console" style="display:none">
+    <section class="panel" style="margin-bottom:18px">
+      <div class="head"><h2>เปิดตี้ใหม่</h2></div>
+      <div class="body">
+        <div class="grid-form">
+          <div class="field">
+            <label for="pName">ชื่อตี้</label>
+            <input id="pName" placeholder="เช่น Sanctuary รอบ 1" />
+          </div>
+          <div class="field">
+            <label for="pTime">เวลาเริ่มลง (ไม่บังคับ)</label>
+            <input id="pTime" type="datetime-local" />
+          </div>
+        </div>
+        <button class="btn gold" id="createParty">+ สร้างตี้</button>
+      </div>
+    </section>
+
+    <div class="cols">
+      <section class="panel">
+        <div class="head">
+          <h2>รายชื่อรอจัด</h2>
+          <span class="eyebrow" id="poolCount">0</span>
+        </div>
+        <div class="body">
+          <p class="hint" style="margin:0 0 12px">ลากการ์ดไปวางในตี้ทางขวา · ลากกลับมาที่นี่เพื่อเอาออก</p>
+          <div class="slots dropzone pool-list" id="pool" data-party="pool"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="head">
+          <h2>ตี้ทั้งหมด</h2>
+          <span class="eyebrow" id="partyCount">0 ตี้</span>
+        </div>
+        <div class="body">
+          <div class="board" id="board"><p class="empty">ยังไม่มีตี้ — สร้างด้านบน</p></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/vendor/Sortable.min.js"></script>
+<script src="/common.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>

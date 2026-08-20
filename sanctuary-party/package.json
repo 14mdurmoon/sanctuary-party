@@ -1,0 +1,17 @@
+{
+  "name": "sanctuary-party",
+  "version": "1.0.0",
+  "description": "Sanctuary raid party organizer with live drag-and-drop and countdown",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2"
+  }
+}
