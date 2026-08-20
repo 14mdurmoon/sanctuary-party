@@ -4,39 +4,35 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const Database = require('better-sqlite3');
 
 const PARTY_SIZE = 10;
 
-// ---------- storage ----------
+// ---------- storage (JSON file, no native deps) ----------
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new Database(path.join(DATA_DIR, 'sanctuary.db'));
-db.pragma('journal_mode = WAL');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS characters (
-    id         TEXT PRIMARY KEY,
-    playerName TEXT NOT NULL,
-    charName   TEXT NOT NULL,
-    cp         INTEGER NOT NULL DEFAULT 0,
-    className  TEXT NOT NULL DEFAULT '',
-    partyId    TEXT,
-    slotOrder  INTEGER NOT NULL DEFAULT 0,
-    editToken  TEXT NOT NULL,
-    createdAt  INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS parties (
-    id         TEXT PRIMARY KEY,
-    name       TEXT NOT NULL,
-    startTime  INTEGER,
-    sortOrder  INTEGER NOT NULL DEFAULT 0,
-    createdAt  INTEGER NOT NULL
-  );
-`);
+const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
+
+let store = { characters: [], parties: [] };
+try {
+  store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  if (!Array.isArray(store.characters)) store.characters = [];
+  if (!Array.isArray(store.parties)) store.parties = [];
+} catch { /* fresh store */ }
+
+function save() {
+  try {
+    const tmp = DB_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(store));
+    fs.renameSync(tmp, DB_FILE);
+  } catch (e) { console.error('[save] failed:', e.message); }
+}
 
 // ---------- helpers ----------
 const rid = () => crypto.randomBytes(9).toString('hex');
 const now = () => Date.now();
+const findChar = (id) => store.characters.find((c) => c.id === id);
+const findParty = (id) => store.parties.find((p) => p.id === id);
+
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
 if (!process.env.ADMIN_PASSWORD) {
   console.warn('[warn] ADMIN_PASSWORD not set — using default "admin1234". Set it in Railway variables!');
@@ -50,24 +46,20 @@ function requireAdmin(req, res, next) {
 }
 
 function getState() {
-  const chars = db.prepare(
-    'SELECT id, playerName, charName, cp, className AS class, partyId, slotOrder FROM characters ORDER BY slotOrder, createdAt'
-  ).all();
-  const parties = db.prepare(
-    'SELECT id, name, startTime, sortOrder FROM parties ORDER BY sortOrder, createdAt'
-  ).all();
+  const chars = [...store.characters].sort(
+    (a, b) => (a.slotOrder - b.slotOrder) || (a.createdAt - b.createdAt)
+  );
   const byParty = {};
   const pool = [];
   for (const c of chars) {
-    const { partyId, slotOrder, ...pub } = c;
-    if (partyId) (byParty[partyId] || (byParty[partyId] = [])).push(pub);
+    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className };
+    if (c.partyId && findParty(c.partyId)) (byParty[c.partyId] || (byParty[c.partyId] = [])).push(pub);
     else pool.push(pub);
   }
-  return {
-    partySize: PARTY_SIZE,
-    pool,
-    parties: parties.map((p) => ({ ...p, members: byParty[p.id] || [] })),
-  };
+  const parties = [...store.parties]
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
+    .map((p) => ({ id: p.id, name: p.name, startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
+  return { partySize: PARTY_SIZE, pool, parties };
 }
 
 // ---------- app ----------
@@ -79,9 +71,7 @@ app.disable('x-powered-by');
 const clients = new Set();
 function broadcast() {
   const payload = `data: ${JSON.stringify(getState())}\n\n`;
-  for (const res of clients) {
-    try { res.write(payload); } catch { /* dropped */ }
-  }
+  for (const res of clients) { try { res.write(payload); } catch {} }
 }
 app.get('/api/stream', (req, res) => {
   res.set({
@@ -122,77 +112,73 @@ app.post('/api/characters', (req, res) => {
   if (!playerName || !charName) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อคนเล่นและชื่อตัวละคร' });
   }
-  const id = rid();
-  const editToken = rid() + rid();
-  const maxOrder = db.prepare('SELECT COALESCE(MAX(slotOrder),0) m FROM characters').get().m;
-  db.prepare(
-    `INSERT INTO characters (id, playerName, charName, cp, className, partyId, slotOrder, editToken, createdAt)
-     VALUES (?,?,?,?,?,NULL,?,?,?)`
-  ).run(id, playerName, charName, cp, cls, maxOrder + 1, editToken, now());
-  broadcast();
-  res.json({ id, editToken });
+  const maxOrder = store.characters.reduce((m, c) => Math.max(m, c.slotOrder || 0), 0);
+  const ch = {
+    id: rid(), playerName, charName, cp, className: cls,
+    partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(),
+  };
+  store.characters.push(ch);
+  save(); broadcast();
+  res.json({ id: ch.id, editToken: ch.editToken });
 });
 
 app.put('/api/characters/:id', (req, res) => {
-  const c = db.prepare('SELECT * FROM characters WHERE id=?').get(req.params.id);
+  const c = findChar(req.params.id);
   if (!c) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
   const token = req.headers['x-edit-token'] || '';
   if (token !== c.editToken && !isAdmin(req)) {
     return res.status(403).json({ error: 'แก้ไขได้เฉพาะตัวละครของคุณ' });
   }
   let { playerName, charName, cp, class: cls } = req.body || {};
-  playerName = playerName !== undefined ? String(playerName).trim().slice(0, 40) : c.playerName;
-  charName = charName !== undefined ? String(charName).trim().slice(0, 40) : c.charName;
-  cls = cls !== undefined ? String(cls).trim().slice(0, 40) : c.className;
-  cp = cp !== undefined ? Math.max(0, parseInt(cp, 10) || 0) : c.cp;
-  if (!playerName || !charName) return res.status(400).json({ error: 'ชื่อห้ามว่าง' });
-  db.prepare('UPDATE characters SET playerName=?, charName=?, cp=?, className=? WHERE id=?')
-    .run(playerName, charName, cp, cls, c.id);
-  broadcast();
+  if (playerName !== undefined) c.playerName = String(playerName).trim().slice(0, 40) || c.playerName;
+  if (charName !== undefined) c.charName = String(charName).trim().slice(0, 40) || c.charName;
+  if (cls !== undefined) c.className = String(cls).trim().slice(0, 40);
+  if (cp !== undefined) c.cp = Math.max(0, parseInt(cp, 10) || 0);
+  save(); broadcast();
   res.json({ ok: true });
 });
 
 app.delete('/api/characters/:id', (req, res) => {
-  const c = db.prepare('SELECT * FROM characters WHERE id=?').get(req.params.id);
+  const c = findChar(req.params.id);
   if (!c) return res.json({ ok: true });
   const token = req.headers['x-edit-token'] || '';
   if (token !== c.editToken && !isAdmin(req)) {
     return res.status(403).json({ error: 'ลบได้เฉพาะตัวละครของคุณ' });
   }
-  db.prepare('DELETE FROM characters WHERE id=?').run(c.id);
-  broadcast();
+  store.characters = store.characters.filter((x) => x.id !== c.id);
+  save(); broadcast();
   res.json({ ok: true });
 });
 
 // ---------- parties (admin only) ----------
 app.post('/api/parties', requireAdmin, (req, res) => {
   const { name, startTime } = req.body || {};
-  const id = rid();
-  const maxOrder = db.prepare('SELECT COALESCE(MAX(sortOrder),0) m FROM parties').get().m;
-  db.prepare('INSERT INTO parties (id, name, startTime, sortOrder, createdAt) VALUES (?,?,?,?,?)')
-    .run(id, String(name || 'ตี้ใหม่').trim().slice(0, 40) || 'ตี้ใหม่',
-         startTime ? Number(startTime) : null, maxOrder + 1, now());
-  broadcast();
-  res.json({ id });
+  const maxOrder = store.parties.reduce((m, p) => Math.max(m, p.sortOrder || 0), 0);
+  const p = {
+    id: rid(),
+    name: String(name || 'ตี้ใหม่').trim().slice(0, 40) || 'ตี้ใหม่',
+    startTime: startTime ? Number(startTime) : null,
+    sortOrder: maxOrder + 1, createdAt: now(),
+  };
+  store.parties.push(p);
+  save(); broadcast();
+  res.json({ id: p.id });
 });
 
 app.put('/api/parties/:id', requireAdmin, (req, res) => {
-  const p = db.prepare('SELECT * FROM parties WHERE id=?').get(req.params.id);
+  const p = findParty(req.params.id);
   if (!p) return res.status(404).json({ error: 'ไม่พบตี้' });
   const { name, startTime } = req.body || {};
-  db.prepare('UPDATE parties SET name=?, startTime=? WHERE id=?').run(
-    name !== undefined ? (String(name).trim().slice(0, 40) || p.name) : p.name,
-    startTime !== undefined ? (startTime ? Number(startTime) : null) : p.startTime,
-    p.id
-  );
-  broadcast();
+  if (name !== undefined) p.name = String(name).trim().slice(0, 40) || p.name;
+  if (startTime !== undefined) p.startTime = startTime ? Number(startTime) : null;
+  save(); broadcast();
   res.json({ ok: true });
 });
 
 app.delete('/api/parties/:id', requireAdmin, (req, res) => {
-  db.prepare('UPDATE characters SET partyId=NULL WHERE partyId=?').run(req.params.id);
-  db.prepare('DELETE FROM parties WHERE id=?').run(req.params.id);
-  broadcast();
+  for (const c of store.characters) if (c.partyId === req.params.id) c.partyId = null;
+  store.parties = store.parties.filter((p) => p.id !== req.params.id);
+  save(); broadcast();
   res.json({ ok: true });
 });
 
@@ -205,16 +191,14 @@ app.post('/api/layout', requireAdmin, (req, res) => {
       return res.status(400).json({ error: `ตี้ลงได้สูงสุด ${PARTY_SIZE} คน` });
     }
   }
-  const upd = db.prepare('UPDATE characters SET partyId=?, slotOrder=? WHERE id=?');
-  const tx = db.transaction(() => {
-    let order = 0;
-    pool.forEach((cid) => upd.run(null, order++, cid));
-    for (const p of parties) {
-      (p.memberIds || []).forEach((cid) => upd.run(p.id, order++, cid));
-    }
-  });
-  tx();
-  broadcast();
+  let order = 0;
+  const setPos = (id, partyId) => {
+    const c = findChar(id);
+    if (c) { c.partyId = partyId; c.slotOrder = order++; }
+  };
+  pool.forEach((id) => setPos(id, null));
+  for (const p of parties) (p.memberIds || []).forEach((id) => setPos(id, p.id));
+  save(); broadcast();
   res.json({ ok: true });
 });
 
