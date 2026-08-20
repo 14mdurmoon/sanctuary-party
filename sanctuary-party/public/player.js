@@ -60,18 +60,22 @@
   }
 
   async function editChar(c) {
-    const charName = prompt('ชื่อตัวละคร', c.charName); if (charName === null) return;
-    const cp = prompt('CP', c.cp); if (cp === null) return;
-    const cls = prompt('คลาส', c.class || ''); if (cls === null) return;
+    const vals = await SP.formModal('แก้ไขตัวละคร', [
+      { name: 'charName', label: 'ชื่อตัวละคร', value: c.charName },
+      { name: 'cp', label: 'CP', value: c.cp, type: 'number' },
+      { name: 'cls', label: 'คลาส', value: c.class || '', list: 'classes' },
+    ], 'บันทึก');
+    if (!vals) return;
     try {
       await api('PUT', '/api/characters/' + c.id,
-        { charName, cp, class: cls }, { 'X-Edit-Token': owned[c.id] });
+        { charName: vals.charName, cp: vals.cp, class: vals.cls }, { 'X-Edit-Token': owned[c.id] });
       toast('แก้ไขแล้ว');
     } catch (e) { toast(e.message, true); }
   }
 
   async function delChar(c) {
-    if (!confirm(`ลบ "${c.charName}" ?`)) return;
+    const ok = await SP.confirmModal(`ลบ "${c.charName}" ออกจากรายชื่อ?`, 'ลบ');
+    if (!ok) return;
     try {
       await api('DELETE', '/api/characters/' + c.id, null, { 'X-Edit-Token': owned[c.id] });
       delete owned[c.id]; saveOwned();

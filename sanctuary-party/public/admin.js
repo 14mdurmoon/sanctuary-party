@@ -181,7 +181,7 @@
       const id = del.closest('[data-id]')?.dataset.id;
       const card = del.closest('[data-id]');
       const name = card?.querySelector('.cn')?.textContent || 'ตัวละครนี้';
-      if (id && confirm(`ลบ "${name}" ออกจากระบบ?`)) {
+      if (id && await SP.confirmModal(`ลบ "${name}" ออกจากระบบ?`, 'ลบ')) {
         try { await api('DELETE', '/api/characters/' + id, null, authHeaders()); toast('ลบแล้ว'); }
         catch (err) { toast(err.message, true); }
       }
@@ -190,7 +190,7 @@
     const pdel = e.target.closest('.p-del');
     if (pdel) {
       const pid = pdel.dataset.pid;
-      if (confirm('ลบตี้นี้? สมาชิกจะกลับไปอยู่รายชื่อรอจัด')) {
+      if (await SP.confirmModal('ลบตี้นี้? สมาชิกจะกลับไปอยู่รายชื่อรอจัด', 'ลบตี้')) {
         try { await api('DELETE', '/api/parties/' + pid, null, authHeaders()); toast('ลบตี้แล้ว'); }
         catch (err) { toast(err.message, true); }
       }
@@ -200,9 +200,11 @@
     if (pedit) {
       const pid = pedit.dataset.pid;
       const cur = state.parties.find((p) => p.id === pid);
-      const name = prompt('ชื่อตี้', cur ? cur.name : '');
-      if (name != null) {
-        try { await api('PUT', '/api/parties/' + pid, { name }, authHeaders()); }
+      const vals = await SP.formModal('เปลี่ยนชื่อตี้', [
+        { name: 'name', label: 'ชื่อตี้', value: cur ? cur.name : '' },
+      ], 'บันทึก');
+      if (vals && vals.name != null) {
+        try { await api('PUT', '/api/parties/' + pid, { name: vals.name }, authHeaders()); }
         catch (err) { toast(err.message, true); }
       }
     }
