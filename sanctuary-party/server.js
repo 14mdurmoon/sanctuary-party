@@ -12,11 +12,12 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [] };
+let store = { characters: [], parties: [], bans: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
   if (!Array.isArray(store.parties)) store.parties = [];
+  if (!Array.isArray(store.bans)) store.bans = [];
 } catch { /* fresh store */ }
 
 function save() {
@@ -64,6 +65,7 @@ function getState() {
 
 // ---------- app ----------
 const app = express();
+app.set('trust proxy', true);
 app.use(express.json());
 app.disable('x-powered-by');
 
@@ -112,10 +114,14 @@ app.post('/api/characters', (req, res) => {
   if (!playerName || !charName) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อคนเล่นและชื่อตัวละคร' });
   }
+  const ip = req.ip || '';
+  if (store.bans.includes(ip)) {
+    return res.status(403).json({ error: 'IP ของคุณถูกระงับการใช้งาน' });
+  }
   const maxOrder = store.characters.reduce((m, c) => Math.max(m, c.slotOrder || 0), 0);
   const ch = {
     id: rid(), playerName, charName, cp, className: cls,
-    partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(),
+    partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(), ip,
   };
   store.characters.push(ch);
   save(); broadcast();
@@ -157,6 +163,34 @@ app.post('/api/characters/:id/carry', requireAdmin, (req, res) => {
   c.carry = !c.carry;
   save(); broadcast();
   res.json({ carry: !!c.carry });
+});
+
+// ---------- IP bans (admin only) ----------
+app.get('/api/admin/bans', requireAdmin, (_req, res) => {
+  const counts = {};
+  for (const c of store.characters) if (c.ip) counts[c.ip] = (counts[c.ip] || 0) + 1;
+  res.json(store.bans.map((ip) => ({ ip, chars: counts[ip] || 0 })));
+});
+
+app.post('/api/admin/ban', requireAdmin, (req, res) => {
+  const { charId } = req.body || {};
+  const c = findChar(charId);
+  if (!c) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
+  const ip = c.ip || '';
+  if (!ip) return res.status(400).json({ error: 'ตัวละครนี้ไม่มีข้อมูล IP (สร้างก่อนเปิดระบบแบน)' });
+  if (!store.bans.includes(ip)) store.bans.push(ip);
+  const before = store.characters.length;
+  store.characters = store.characters.filter((x) => x.ip !== ip);
+  const removed = before - store.characters.length;
+  save(); broadcast();
+  res.json({ ip, removed });
+});
+
+app.post('/api/admin/unban', requireAdmin, (req, res) => {
+  const { ip } = req.body || {};
+  store.bans = store.bans.filter((x) => x !== ip);
+  save();
+  res.json({ ok: true });
 });
 
 // ---------- parties (admin only) ----------

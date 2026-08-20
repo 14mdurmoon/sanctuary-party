@@ -4,6 +4,7 @@
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
   let dupWarned = false;
+  let adminBans = [];
   const allChars = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
   const charById = (id) => allChars().find((c) => c.id === id);
   const norm = (nm) => String(nm || '').trim().toLowerCase();
@@ -52,7 +53,29 @@
     $('loginPanel').style.display = 'none';
     $('console').style.display = '';
     $('logout').style.display = '';
+    if (!document.getElementById('bansBar')) {
+      const bar = document.createElement('div');
+      bar.className = 'bans-bar'; bar.id = 'bansBar'; bar.style.display = 'none';
+      $('console').prepend(bar);
+    }
+    loadBans();
     startLive();
+  }
+
+  async function loadBans() {
+    try { adminBans = await api('GET', '/api/admin/bans', null, authHeaders()); }
+    catch { adminBans = []; }
+    renderBans();
+  }
+  function renderBans() {
+    const bar = document.getElementById('bansBar');
+    if (!bar) return;
+    if (!adminBans.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = `<span class="bans-title">🚫 IP ที่แบน (${adminBans.length})</span>` +
+      adminBans.map((b) =>
+        `<span class="ban-chip">${esc(b.ip)}<button class="unban" data-ip="${esc(b.ip)}">ปลดแบน</button></span>`
+      ).join('');
   }
 
   // ---------- create party ----------
@@ -79,7 +102,10 @@
          <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
        </div>
        <span class="cp">${nfmt(c.cp)}</span>
-       <div class="acts"><button class="icon-btn del" title="ลบตัวละคร">✕</button></div>`;
+       <div class="acts">
+         <button class="icon-btn ban" title="แบน IP คนนี้">🚫</button>
+         <button class="icon-btn del" title="ลบตัวละคร">✕</button>
+       </div>`;
     return div;
   }
 
@@ -209,6 +235,23 @@
 
   // ---------- delegated controls ----------
   $('console').addEventListener('click', async (e) => {
+    const unban = e.target.closest('.unban');
+    if (unban) {
+      try { await api('POST', '/api/admin/unban', { ip: unban.dataset.ip }, authHeaders()); toast('ปลดแบนแล้ว'); loadBans(); }
+      catch (err) { toast(err.message, true); }
+      return;
+    }
+    const ban = e.target.closest('.icon-btn.ban');
+    if (ban) {
+      const card = ban.closest('[data-id]');
+      const id = card && card.dataset.id;
+      const name = (card && card.querySelector('.cn') && card.querySelector('.cn').textContent) || 'คนนี้';
+      if (id && await SP.confirmModal(`แบน IP ของ "${name}"? ตัวละครทั้งหมดจาก IP นี้จะถูกลบ`, 'แบน')) {
+        try { const r = await api('POST', '/api/admin/ban', { charId: id }, authHeaders()); toast(`แบนแล้ว · ลบ ${r.removed} ตัว`); loadBans(); }
+        catch (err) { toast(err.message, true); }
+      }
+      return;
+    }
     const del = e.target.closest('.del:not(.p-del)');
     if (del) {
       const id = del.closest('[data-id]')?.dataset.id;
@@ -245,6 +288,7 @@
 
   // right-click a card to toggle "carry" (light red)
   $('console').addEventListener('contextmenu', async (e) => {
+    if (e.target.closest('.icon-btn')) return;
     const card = e.target.closest('[data-id]');
     if (!card) return;
     e.preventDefault();

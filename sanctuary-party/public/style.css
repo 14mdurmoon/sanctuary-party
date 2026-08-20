@@ -150,6 +150,12 @@ input::placeholder { color: var(--faint); }
 }
 .icon-btn:hover { color: var(--text); border-color: var(--ether-dim); }
 .icon-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+.icon-btn.ban:hover { color: var(--danger); border-color: var(--danger); }
+.bans-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: rgba(255,107,125,.06); border: 1px solid #52304a; border-radius: 12px; }
+.bans-title { font-size: .82rem; color: var(--danger); font-weight: 600; }
+.ban-chip { display: inline-flex; align-items: center; gap: 7px; font-family: ui-monospace, monospace; font-size: .76rem; color: var(--muted); background: var(--void-2); border: 1px solid var(--line); padding: 3px 6px 3px 10px; border-radius: 8px; }
+.ban-chip .unban { font-family: "Sarabun", sans-serif; font-size: .72rem; color: var(--ether); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.ban-chip .unban:hover { border-color: var(--ether); }
 
 /* ---- roster table ---- */
 .roster { width: 100%; border-collapse: collapse; font-size: .9rem; }
