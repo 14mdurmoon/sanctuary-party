@@ -187,8 +187,19 @@ app.delete('/api/parties/:id', requireAdmin, (req, res) => {
 app.post('/api/layout', requireAdmin, (req, res) => {
   const { pool = [], parties = [] } = req.body || {};
   for (const p of parties) {
-    if ((p.memberIds || []).length > PARTY_SIZE) {
+    const ids = p.memberIds || [];
+    if (ids.length > PARTY_SIZE) {
       return res.status(400).json({ error: `ตี้ลงได้สูงสุด ${PARTY_SIZE} คน` });
+    }
+    const seen = new Set();
+    for (const cid of ids) {
+      const c = findChar(cid);
+      if (!c) continue;
+      const key = String(c.playerName || '').trim().toLowerCase();
+      if (seen.has(key)) {
+        return res.status(400).json({ error: `ตี้เดียวมีคนเล่นซ้ำไม่ได้: ${c.playerName}` });
+      }
+      seen.add(key);
     }
   }
   let order = 0;

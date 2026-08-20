@@ -3,6 +3,10 @@
   const TOKEN_KEY = 'sanctuary_admin_token';
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
+  let dupWarned = false;
+  const allChars = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
+  const charById = (id) => allChars().find((c) => c.id === id);
+  const norm = (nm) => String(nm || '').trim().toLowerCase();
   let dragging = false;
   let pending = null;
   let sortables = [];
@@ -145,11 +149,23 @@
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
-        onStart: () => { dragging = true; },
+        onStart: () => { dragging = true; dupWarned = false; },
         onMove: (evt) => {
           const to = evt.to;
           if (to.dataset.party && to.dataset.party !== 'pool' && to !== evt.from) {
             if (to.querySelectorAll('[data-id]').length >= state.partySize) return false;
+            const dragged = charById(evt.dragged && evt.dragged.dataset.id);
+            if (dragged) {
+              const dup = [...to.querySelectorAll('[data-id]')].some((el) => {
+                if (el === evt.dragged) return false;
+                const m = charById(el.dataset.id);
+                return m && norm(m.playerName) === norm(dragged.playerName);
+              });
+              if (dup) {
+                if (!dupWarned) { toast(`${dragged.playerName} อยู่ในตี้นี้แล้ว`, true); dupWarned = true; }
+                return false;
+              }
+            }
           }
           return true;
         },
