@@ -1,5 +1,5 @@
 (function () {
-  const { fmtCountdown, classColor, toast, api, connect, esc, nfmt } = SP;
+  const { fmtCountdown, classColor, clsHtml, clericBadge, toast, api, connect, esc, nfmt } = SP;
   const TOKEN_KEY = 'sanctuary_admin_token';
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
@@ -72,7 +72,7 @@
       `<span class="cls-dot" style="color:${classColor(c.class)}"></span>
        <div class="idn">
          <div class="cn">${esc(c.charName)}</div>
-         <div class="pn">${esc(c.playerName)} · <span class="cls">${esc(c.class || '—')}</span></div>
+         <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
        </div>
        <span class="cp">${nfmt(c.cp)}</span>
        <div class="acts"><button class="icon-btn del" title="ลบตัวละคร">✕</button></div>`;
@@ -113,6 +113,7 @@
             <span class="count"><b>${n}</b>/${cap}</span>
           </div>
           <div class="p-cp">CP รวม <b>${nfmt(totalCp)}</b></div>
+          <div class="p-badges">${clericBadge(p.members)}</div>
           <div class="field" style="margin:10px 0 0">
             <input type="datetime-local" class="p-time" data-pid="${p.id}" value="${toLocalInput(p.startTime)}">
           </div>

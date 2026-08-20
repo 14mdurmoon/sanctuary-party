@@ -1,5 +1,5 @@
 (function () {
-  const { fmtCountdown, classColor, toast, api, connect, esc, nfmt } = SP;
+  const { fmtCountdown, classColor, clsHtml, clericBadge, toast, api, connect, esc, nfmt } = SP;
   const OWN_KEY = 'sanctuary_owned_v1';
   let owned = {};      // { charId: editToken }
   let state = { pool: [], parties: [], partySize: 10 };
@@ -46,7 +46,7 @@
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
           <div class="cn">${esc(c.charName)} ${p ? `<span class="tag assigned">${esc(p.name)}</span>` : ''}</div>
-          <div class="pn">${esc(c.playerName)} · <span class="cls">${esc(c.class || '—')}</span></div>
+          <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
         <div class="acts">
@@ -95,7 +95,7 @@
       return `<tr>
         <td><span class="cls-dot" style="color:${classColor(c.class)};display:inline-block;margin-right:7px"></span><b>${esc(c.charName)}</b></td>
         <td class="muted">${esc(c.playerName)}</td>
-        <td>${esc(c.class || '—')}</td>
+        <td>${clsHtml(c.class)}</td>
         <td class="num">${nfmt(c.cp)}</td>
         <td>${p ? `<span class="tag assigned">${esc(p.name)}</span>` : '<span class="tag pool">ยังไม่จัด</span>'}</td>
       </tr>`;
@@ -126,6 +126,7 @@
             <span class="count"><b>${n}</b>/${cap}</span>
           </div>
           <div class="p-cp">CP รวม <b>${nfmt(totalCp)}</b></div>
+          <div class="p-badges">${clericBadge(p.members)}</div>
           <div class="countdown ${''}" data-start="${p.startTime || ''}">
             <div class="cd-label">เริ่มลงในอีก</div>
             <div class="cd-clock">—</div>
@@ -143,7 +144,7 @@
           <span class="cls-dot" style="color:${classColor(m.class)}"></span>
           <div class="idn">
             <div class="cn">${esc(m.charName)}</div>
-            <div class="pn">${esc(m.playerName)} · <span class="cls">${esc(m.class || '—')}</span></div>
+            <div class="pn">${esc(m.playerName)} · ${clsHtml(m.class)}</div>
           </div>
           <span class="cp">${nfmt(m.cp)}</span>`;
         slots.appendChild(row);

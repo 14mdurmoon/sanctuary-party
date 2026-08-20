@@ -161,6 +161,9 @@ input::placeholder { color: var(--faint); }
 }
 .tag.assigned { color: var(--good); border-color: rgba(111,224,168,.3); background: rgba(111,224,168,.08); }
 .tag.pool { color: var(--faint); }
+.tag.ok { color: #4fe0a1; border-color: rgba(79,224,161,.32); background: rgba(79,224,161,.09); }
+.tag.warn { color: #ffb454; border-color: rgba(255,180,84,.38); background: rgba(255,180,84,.1); }
+.p-badges { margin-top: 8px; }
 
 /* ---- party board ---- */
 .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }

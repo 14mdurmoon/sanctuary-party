@@ -23,7 +23,21 @@ window.SP = (function () {
     return { state, clock, when: `เริ่ม ${when}` };
   }
 
+  const CLERIC_GREEN = '#4fe0a1';
+  const isCleric = (cls) => /cleric/i.test(cls || '');
+  const clsHtml = (cls) => {
+    const t = esc(cls || '—');
+    return isCleric(cls) ? `<span class="cls" style="color:${CLERIC_GREEN}">${t}</span>` : `<span class="cls">${t}</span>`;
+  };
+  const clericBadge = (members) => {
+    const n = (members || []).filter((m) => isCleric(m.class)).length;
+    return n > 0
+      ? `<span class="tag ok">✚ Cleric ×${n}</span>`
+      : `<span class="tag warn">⚠ ยังไม่มี Cleric</span>`;
+  };
+
   function classColor(cls) {
+    if (isCleric(cls)) return CLERIC_GREEN;
     if (!cls) return 'hsl(220, 12%, 55%)';
     let h = 0;
     for (let i = 0; i < cls.length; i++) h = (h * 31 + cls.charCodeAt(i)) % 360;
@@ -150,5 +164,5 @@ window.SP = (function () {
   const formModal = (title, fields, okLabel) =>
     showModal({ title, fields, okLabel: okLabel || 'บันทึก' });
 
-  return { fmtCountdown, classColor, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
+  return { fmtCountdown, classColor, isCleric, clsHtml, clericBadge, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
 })();
