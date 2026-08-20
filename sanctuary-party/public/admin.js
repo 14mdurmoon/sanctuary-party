@@ -187,7 +187,23 @@
   }
 
   async function syncLayout() {
-    try { await api('POST', '/api/layout', collectLayout(), authHeaders()); }
+    const layout = collectLayout();
+    // duplicate-player guard (reliable on touch where onMove may not cancel the drop)
+    for (const p of layout.parties) {
+      const seen = new Set();
+      for (const id of p.memberIds) {
+        const c = charById(id);
+        if (!c) continue;
+        const k = norm(c.playerName);
+        if (seen.has(k)) {
+          toast(`${c.playerName} อยู่ในตี้เดียวกันซ้ำไม่ได้`, true);
+          render(); // revert illegal drop to last server state
+          return;
+        }
+        seen.add(k);
+      }
+    }
+    try { await api('POST', '/api/layout', layout, authHeaders()); }
     catch (e) { toast(e.message, true); render(); }
   }
 
