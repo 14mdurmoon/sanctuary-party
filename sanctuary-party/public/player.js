@@ -125,7 +125,7 @@
             <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
             <span class="count"><b>${n}</b>/${cap}</span>
           </div>
-          <div class="p-cp">CP รวม <b>${nfmt(totalCp)}</b></div>
+          <div class="p-cp">CP เฉลี่ย <b>${nfmt(n ? Math.round(totalCp / n) : 0)}</b></div>
           <div class="p-badges">${clericBadge(p.members)}</div>
           <div class="countdown ${''}" data-start="${p.startTime || ''}">
             <div class="cd-label">เริ่มลงในอีก</div>
