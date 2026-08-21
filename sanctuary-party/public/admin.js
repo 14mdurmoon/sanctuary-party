@@ -1,5 +1,5 @@
 (function () {
-  const { fmtCountdown, classColor, clsHtml, clericBadge, toast, api, connect, esc, nfmt } = SP;
+  const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonName, toast, api, connect, esc, nfmt } = SP;
   const TOKEN_KEY = 'sanctuary_admin_token';
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
@@ -110,7 +110,7 @@
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
       `<span class="cls-dot" style="color:${classColor(c.class)}"></span>
        <div class="idn">
-         <div class="cn">${esc(c.charName)}</div>
+         <div class="cn">${esc(c.charName)}${dungeonName(state.groups, c.dungeonId) ? `<span class="tag dungeon">${esc(dungeonName(state.groups, c.dungeonId))}</span>` : ''}</div>
          <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
        </div>
        <span class="cp">${nfmt(c.cp)}</span>
@@ -132,11 +132,10 @@
     if (!state.pool.length) pool.innerHTML = '<div class="empty-hint">ทุกคนถูกจัดลงตี้แล้ว</div>';
     $('poolCount').textContent = `${state.pool.length} คน`;
 
-    // board = kanban columns (categories, laid out horizontally + an "ungrouped" column)
+    // board = category sections stacked vertically; parties flow in a grid inside each
     const board = $('board');
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     board.innerHTML = '';
-    board.classList.add('kanban');
 
     const groups = state.groups || [];
     const byGroup = new Map();
@@ -147,27 +146,25 @@
       byGroup.get(key).push(p);
     });
 
-    const makeCol = (gid, title, deletable) => {
-      const col = document.createElement('div');
-      col.className = 'kanban-col' + (gid === 'none' ? ' ungrouped' : '');
+    const makeSection = (gid, title, deletable) => {
       const parties = byGroup.get(gid) || [];
-      col.innerHTML = `
-        <div class="kanban-col-head">
-          <span class="kc-title ${deletable ? 'g-edit' : ''}" ${deletable ? `data-gid="${gid}" title="คลิกเพื่อแก้ชื่อหมวด"` : ''}>${esc(title)}</span>
-          <span class="kc-meta">
-            <span class="kc-count">${parties.length}</span>
-            ${deletable ? `<button class="icon-btn del g-del" data-gid="${gid}" title="ลบหมวด">✕</button>` : ''}
-          </span>
+      const sec = document.createElement('div');
+      sec.className = 'party-section' + (gid === 'none' ? ' ungrouped' : '');
+      sec.innerHTML = `
+        <div class="section-head">
+          <span class="section-title ${deletable ? 'g-edit' : ''}" ${deletable ? `data-gid="${gid}" title="คลิกเพื่อแก้ชื่อหมวด"` : ''}>${esc(title)}</span>
+          <span class="section-count">${parties.length} ตี้</span>
+          ${deletable ? `<button class="icon-btn del g-del" data-gid="${gid}" title="ลบหมวด">✕</button>` : ''}
         </div>
-        <div class="kanban-col-body" data-group="${gid}"></div>`;
-      const body = col.querySelector('.kanban-col-body');
-      parties.forEach((p) => body.appendChild(buildPartyCard(p)));
-      return col;
+        <div class="section-grid" data-group="${gid}"></div>`;
+      const grid = sec.querySelector('.section-grid');
+      parties.forEach((p) => grid.appendChild(buildPartyCard(p)));
+      return sec;
     };
 
-    // ungrouped first, then each category (in order)
-    board.appendChild(makeCol('none', 'ยังไม่จัดหมวด', false));
-    groups.forEach((g) => board.appendChild(makeCol(g.id, g.name, true)));
+    // ungrouped first, then each category
+    board.appendChild(makeSection('none', 'ยังไม่จัดหมวด', false));
+    groups.forEach((g) => board.appendChild(makeSection(g.id, g.name, true)));
 
     initSortables();
     tickCountdowns();
@@ -248,7 +245,7 @@
     });
 
     // party-level: drag whole parties between category columns (via handle)
-    document.querySelectorAll('.kanban-col-body').forEach((el) => {
+    document.querySelectorAll('.section-grid').forEach((el) => {
       sortables.push(new Sortable(el, {
         group: 'parties',
         handle: '.party-handle',
@@ -267,7 +264,7 @@
   }
 
   function collectPartyLayout() {
-    const columns = [...document.querySelectorAll('.kanban-col-body')].map((col) => ({
+    const columns = [...document.querySelectorAll('.section-grid')].map((col) => ({
       groupId: col.dataset.group === 'none' ? null : col.dataset.group,
       partyIds: [...col.children].filter((el) => el.dataset && el.dataset.pid).map((el) => el.dataset.pid),
     }));

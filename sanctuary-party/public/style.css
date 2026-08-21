@@ -37,7 +37,7 @@ body {
 a { color: var(--ether); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.wrap { max-width: 1180px; margin: 0 auto; padding: 22px 18px 80px; }
+.wrap { max-width: 1360px; margin: 0 auto; padding: 22px 18px 80px; }
 
 /* ---- header ---- */
 .masthead {
@@ -172,6 +172,7 @@ input::placeholder { color: var(--faint); }
 }
 .tag.assigned { color: var(--good); border-color: rgba(111,224,168,.3); background: rgba(111,224,168,.08); }
 .tag.pool { color: var(--faint); }
+.tag.dungeon { color: var(--ether); border-color: rgba(99,214,234,.32); background: rgba(99,214,234,.08); margin-left: 6px; font-size: .68rem; vertical-align: middle; }
 .tag.ok { color: #4fe0a1; border-color: rgba(79,224,161,.32); background: rgba(79,224,161,.09); }
 .tag.warn { color: #ffb454; border-color: rgba(255,180,84,.38); background: rgba(255,180,84,.1); }
 .p-badges { margin-top: 8px; }
@@ -179,49 +180,30 @@ input::placeholder { color: var(--faint); }
 /* ---- party board ---- */
 .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 
-/* kanban: categories as columns laid out horizontally, scroll right */
-.board.kanban {
-  display: flex;
-  align-items: flex-start;
+/* category sections stacked vertically; parties flow right (2-3) then wrap */
+.party-section + .party-section { margin-top: 22px; }
+.section-head {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 12px; padding: 4px 4px 10px; border-bottom: 1px solid var(--line);
+}
+.section-title {
+  font-family: "Cinzel", "Sarabun", serif; font-weight: 700; font-size: 1.05rem;
+  letter-spacing: .08em; text-transform: uppercase; color: #f2f5ff;
+}
+.section-title.g-edit { cursor: pointer; }
+.section-title.g-edit:hover { color: var(--ether); }
+.party-section.ungrouped .section-title { color: var(--faint); font-family: "Sarabun", sans-serif; letter-spacing: .02em; }
+.section-count { font-size: .74rem; color: var(--faint); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; margin-right: auto; }
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-  overflow-x: auto;
-  padding-bottom: 10px;
-  scroll-snap-type: x proximity;
+  min-height: 64px;
 }
-.kanban-col {
-  flex: 0 0 300px;
-  max-width: 300px;
-  background: rgba(20,26,46,.45);
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  padding: 10px;
-  scroll-snap-align: start;
+.section-grid:empty::after {
+  content: "ลากตี้มาที่นี่"; grid-column: 1 / -1; text-align: center; color: var(--faint);
+  font-size: .82rem; padding: 20px 6px; border: 1px dashed var(--line); border-radius: 10px;
 }
-.kanban-col.ungrouped { background: rgba(20,26,46,.2); border-style: dashed; }
-.kanban-col-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 4px 6px 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line);
-}
-.kc-title {
-  font-family: "Cinzel", "Sarabun", serif; font-weight: 700; font-size: .96rem;
-  letter-spacing: .06em; text-transform: uppercase; color: #f2f5ff;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.kc-title.g-edit { cursor: pointer; }
-.kc-title.g-edit:hover { color: var(--ether); }
-.kanban-col.ungrouped .kc-title { color: var(--faint); font-family: "Sarabun", sans-serif; letter-spacing: .02em; }
-.kc-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-.kc-count {
-  font-family: ui-monospace, monospace; font-size: .74rem; color: var(--muted);
-  background: var(--void-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
-}
-.kanban-col-body { min-height: 70px; display: flex; flex-direction: column; gap: 12px; }
-.kanban-col-body:empty::after,
-.kanban-col-body.sortable-empty::after {
-  content: "ลากตี้มาที่นี่"; display: block; text-align: center; color: var(--faint);
-  font-size: .8rem; padding: 18px 6px; border: 1px dashed var(--line); border-radius: 10px;
-}
-.kanban-col .party { width: 100%; }
 .party-handle {
   cursor: grab; color: var(--faint); font-size: 1rem; line-height: 1;
   padding: 0 2px; user-select: none; flex: none;

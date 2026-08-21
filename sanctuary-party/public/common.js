@@ -134,9 +134,20 @@ window.SP = (function () {
     (opts.fields || []).forEach((f) => {
       const wrap = document.createElement('div'); wrap.className = 'field';
       const lab = document.createElement('label'); lab.textContent = f.label; wrap.appendChild(lab);
-      const inp = document.createElement('input');
-      inp.type = f.type || 'text'; inp.value = f.value == null ? '' : f.value;
-      if (f.list) inp.setAttribute('list', f.list);
+      let inp;
+      if (f.type === 'select') {
+        inp = document.createElement('select');
+        (f.options || []).forEach((o) => {
+          const opt = document.createElement('option');
+          opt.value = o.value; opt.textContent = o.label;
+          if (String(o.value) === String(f.value == null ? '' : f.value)) opt.selected = true;
+          inp.appendChild(opt);
+        });
+      } else {
+        inp = document.createElement('input');
+        inp.type = f.type || 'text'; inp.value = f.value == null ? '' : f.value;
+        if (f.list) inp.setAttribute('list', f.list);
+      }
       wrap.appendChild(inp); body.appendChild(wrap); inputs[f.name] = inp;
     });
     const okBtn = el.querySelector('[data-act="ok"]');
@@ -164,5 +175,11 @@ window.SP = (function () {
   const formModal = (title, fields, okLabel) =>
     showModal({ title, fields, okLabel: okLabel || 'บันทึก' });
 
-  return { fmtCountdown, classColor, isCleric, clsHtml, clericBadge, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
+  const dungeonName = (groups, id) => {
+    if (!id) return '';
+    const g = (groups || []).find((x) => x.id === id);
+    return g ? g.name : '';
+  };
+
+  return { fmtCountdown, classColor, isCleric, clsHtml, clericBadge, dungeonName, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
 })();
