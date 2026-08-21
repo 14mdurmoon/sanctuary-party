@@ -81,9 +81,10 @@
   // ---------- create party ----------
   $('createParty').addEventListener('click', async () => {
     const name = $('pName').value.trim() || 'ตี้ใหม่';
+    const group = $('pGroup').value.trim();
     const startTime = fromLocalInput($('pTime').value);
     try {
-      await api('POST', '/api/parties', { name, startTime }, authHeaders());
+      await api('POST', '/api/parties', { name, group, startTime }, authHeaders());
       $('pName').value = ''; $('pTime').value = '';
       toast('สร้างตี้แล้ว');
     } catch (e) { toast(e.message, true); }
@@ -120,47 +121,84 @@
     if (!state.pool.length) pool.innerHTML = '<div class="empty-hint">ทุกคนถูกจัดลงตี้แล้ว</div>';
     $('poolCount').textContent = `${state.pool.length} คน`;
 
-    // board
+    // board (grouped by p.group)
     const board = $('board');
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     board.innerHTML = '';
-    if (!state.parties.length) board.innerHTML = '<p class="empty">ยังไม่มีตี้ — สร้างด้านบน</p>';
+    board.classList.remove('grouped');
+    if (!state.parties.length) {
+      board.innerHTML = '<p class="empty">ยังไม่มีตี้ — สร้างด้านบน</p>';
+    } else {
+      const order = [];
+      const map = new Map();
+      state.parties.forEach((p) => {
+        const g = (p.group && p.group.trim()) || 'ทั่วไป';
+        if (!map.has(g)) { map.set(g, []); order.push(g); }
+        map.get(g).push(p);
+      });
+      const grouped = order.length > 1 || (order.length === 1 && order[0] !== 'ทั่วไป');
+      if (grouped) {
+        board.classList.add('grouped');
+        order.forEach((g) => {
+          const sec = document.createElement('div');
+          sec.className = 'party-group';
+          const head = document.createElement('div');
+          head.className = 'group-head';
+          head.innerHTML = `<span class="group-name">${esc(g)}</span><span class="group-count">${map.get(g).length} ตี้</span>`;
+          sec.appendChild(head);
+          const grid = document.createElement('div');
+          grid.className = 'board';
+          map.get(g).forEach((p) => grid.appendChild(buildPartyCard(p)));
+          sec.appendChild(grid);
+          board.appendChild(sec);
+        });
+      } else {
+        state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
+      }
+    }
 
-    state.parties.forEach((p) => {
-      const n = p.members.length, cap = state.partySize, full = n >= cap;
-      const totalCp = p.members.reduce((s, m) => s + (m.cp || 0), 0);
-      const card = document.createElement('div');
-      card.className = 'party';
-      card.dataset.pid = p.id;
-      card.innerHTML = `
-        <div class="p-head">
-          <div class="p-title-row">
-            <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ">${esc(p.name)}</span>
-            <button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>
-          </div>
-          <div class="fill ${full ? 'full' : ''}">
-            <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
-            <span class="count"><b>${n}</b>/${cap}</span>
-          </div>
-          <div class="p-cp">CP เฉลี่ย <b>${nfmt(n ? Math.round(totalCp / n) : 0)}</b></div>
-          <div class="p-badges">${clericBadge(p.members)}</div>
-          <div class="field" style="margin:10px 0 0">
-            <input type="datetime-local" class="p-time" data-pid="${p.id}" value="${toLocalInput(p.startTime)}">
-          </div>
-          <div class="countdown" data-start="${p.startTime || ''}">
-            <div class="cd-label">เริ่มลงในอีก</div>
-            <div class="cd-clock">—</div>
-            <div class="cd-when"></div>
-          </div>
-        </div>
-        <div class="slots dropzone" data-party="${p.id}"></div>`;
-      const slots = card.querySelector('.slots');
-      p.members.forEach((m, i) => slots.appendChild(charCard(m, i)));
-      board.appendChild(card);
-    });
+    // groups datalist for quick reuse when creating
+    const gl = $('groups');
+    if (gl) {
+      const uniq = [...new Set(state.parties.map((p) => (p.group || '').trim()).filter(Boolean))];
+      gl.innerHTML = uniq.map((g) => `<option value="${esc(g)}"></option>`).join('');
+    }
 
     initSortables();
     tickCountdowns();
+  }
+
+  function buildPartyCard(p) {
+    const n = p.members.length, cap = state.partySize, full = n >= cap;
+    const totalCp = p.members.reduce((s, m) => s + (m.cp || 0), 0);
+    const card = document.createElement('div');
+    card.className = 'party';
+    card.dataset.pid = p.id;
+    card.innerHTML = `
+      <div class="p-head">
+        <div class="p-title-row">
+          <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ/หมวด">${esc(p.name)}</span>
+          <button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>
+        </div>
+        <div class="fill ${full ? 'full' : ''}">
+          <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
+          <span class="count"><b>${n}</b>/${cap}</span>
+        </div>
+        <div class="p-cp">CP เฉลี่ย <b>${nfmt(n ? Math.round(totalCp / n) : 0)}</b></div>
+        <div class="p-badges">${clericBadge(p.members)}</div>
+        <div class="field" style="margin:10px 0 0">
+          <input type="datetime-local" class="p-time" data-pid="${p.id}" value="${toLocalInput(p.startTime)}">
+        </div>
+        <div class="countdown" data-start="${p.startTime || ''}">
+          <div class="cd-label">เริ่มลงในอีก</div>
+          <div class="cd-clock">—</div>
+          <div class="cd-when"></div>
+        </div>
+      </div>
+      <div class="slots dropzone" data-party="${p.id}"></div>`;
+    const slots = card.querySelector('.slots');
+    p.members.forEach((m, i) => slots.appendChild(charCard(m, i)));
+    return card;
   }
 
   // ---------- drag & drop ----------
@@ -276,11 +314,12 @@
     if (pedit) {
       const pid = pedit.dataset.pid;
       const cur = state.parties.find((p) => p.id === pid);
-      const vals = await SP.formModal('เปลี่ยนชื่อตี้', [
+      const vals = await SP.formModal('แก้ไขตี้', [
         { name: 'name', label: 'ชื่อตี้', value: cur ? cur.name : '' },
+        { name: 'group', label: 'หมวด (เว้นว่าง = ทั่วไป)', value: cur ? (cur.group || '') : '' },
       ], 'บันทึก');
       if (vals && vals.name != null) {
-        try { await api('PUT', '/api/parties/' + pid, { name: vals.name }, authHeaders()); }
+        try { await api('PUT', '/api/parties/' + pid, { name: vals.name, group: vals.group }, authHeaders()); }
         catch (err) { toast(err.message, true); }
       }
     }

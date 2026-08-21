@@ -59,7 +59,7 @@ function getState() {
   }
   const parties = [...store.parties]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
-    .map((p) => ({ id: p.id, name: p.name, startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
+    .map((p) => ({ id: p.id, name: p.name, group: p.group || '', startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
   return { partySize: PARTY_SIZE, pool, parties };
 }
 
@@ -195,11 +195,12 @@ app.post('/api/admin/unban', requireAdmin, (req, res) => {
 
 // ---------- parties (admin only) ----------
 app.post('/api/parties', requireAdmin, (req, res) => {
-  const { name, startTime } = req.body || {};
+  const { name, startTime, group } = req.body || {};
   const maxOrder = store.parties.reduce((m, p) => Math.max(m, p.sortOrder || 0), 0);
   const p = {
     id: rid(),
     name: String(name || 'ตี้ใหม่').trim().slice(0, 40) || 'ตี้ใหม่',
+    group: String(group || '').trim().slice(0, 40),
     startTime: startTime ? Number(startTime) : null,
     sortOrder: maxOrder + 1, createdAt: now(),
   };
@@ -211,8 +212,9 @@ app.post('/api/parties', requireAdmin, (req, res) => {
 app.put('/api/parties/:id', requireAdmin, (req, res) => {
   const p = findParty(req.params.id);
   if (!p) return res.status(404).json({ error: 'ไม่พบตี้' });
-  const { name, startTime } = req.body || {};
+  const { name, startTime, group } = req.body || {};
   if (name !== undefined) p.name = String(name).trim().slice(0, 40) || p.name;
+  if (group !== undefined) p.group = String(group).trim().slice(0, 40);
   if (startTime !== undefined) p.startTime = startTime ? Number(startTime) : null;
   save(); broadcast();
   res.json({ ok: true });

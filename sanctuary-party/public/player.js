@@ -106,51 +106,79 @@
   }
 
   // ---- party board ----
+  function buildPartyCard(p) {
+    const n = p.members.length;
+    const cap = state.partySize;
+    const totalCp = p.members.reduce((s, m) => s + (m.cp || 0), 0);
+    const full = n >= cap;
+    const card = document.createElement('div');
+    card.className = 'party';
+    card.innerHTML = `
+      <div class="p-head">
+        <div class="p-title-row"><span class="p-name">${esc(p.name)}</span></div>
+        <div class="fill ${full ? 'full' : ''}">
+          <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
+          <span class="count"><b>${n}</b>/${cap}</span>
+        </div>
+        <div class="p-cp">CP เฉลี่ย <b>${nfmt(n ? Math.round(totalCp / n) : 0)}</b></div>
+        <div class="p-badges">${clericBadge(p.members)}</div>
+        <div class="countdown" data-start="${p.startTime || ''}">
+          <div class="cd-label">เริ่มลงในอีก</div>
+          <div class="cd-clock">—</div>
+          <div class="cd-when"></div>
+        </div>
+      </div>
+      <div class="slots"></div>`;
+    const slots = card.querySelector('.slots');
+    if (!n) slots.innerHTML = '<div class="empty-hint">ยังไม่มีสมาชิก</div>';
+    else p.members.forEach((m, i) => {
+      const row = document.createElement('div');
+      row.className = 'card' + (m.carry ? ' carry' : '');
+      row.innerHTML = `
+        <span class="slot-idx">${i + 1}</span>
+        <span class="cls-dot" style="color:${classColor(m.class)}"></span>
+        <div class="idn">
+          <div class="cn">${esc(m.charName)}</div>
+          <div class="pn">${esc(m.playerName)} · ${clsHtml(m.class)}</div>
+        </div>
+        <span class="cp">${nfmt(m.cp)}</span>`;
+      slots.appendChild(row);
+    });
+    return card;
+  }
+
   function renderBoard() {
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     const board = $('board');
+    board.classList.remove('grouped');
     if (!state.parties.length) { board.innerHTML = '<p class="empty">แอดมินยังไม่เปิดตี้</p>'; return; }
     board.innerHTML = '';
+    const order = [];
+    const map = new Map();
     state.parties.forEach((p) => {
-      const n = p.members.length;
-      const cap = state.partySize;
-      const totalCp = p.members.reduce((s, m) => s + (m.cp || 0), 0);
-      const full = n >= cap;
-      const card = document.createElement('div');
-      card.className = 'party';
-      card.innerHTML = `
-        <div class="p-head">
-          <div class="p-title-row"><span class="p-name">${esc(p.name)}</span></div>
-          <div class="fill ${full ? 'full' : ''}">
-            <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
-            <span class="count"><b>${n}</b>/${cap}</span>
-          </div>
-          <div class="p-cp">CP เฉลี่ย <b>${nfmt(n ? Math.round(totalCp / n) : 0)}</b></div>
-          <div class="p-badges">${clericBadge(p.members)}</div>
-          <div class="countdown ${''}" data-start="${p.startTime || ''}">
-            <div class="cd-label">เริ่มลงในอีก</div>
-            <div class="cd-clock">—</div>
-            <div class="cd-when"></div>
-          </div>
-        </div>
-        <div class="slots"></div>`;
-      const slots = card.querySelector('.slots');
-      if (!n) slots.innerHTML = '<div class="empty-hint">ยังไม่มีสมาชิก</div>';
-      else p.members.forEach((m, i) => {
-        const row = document.createElement('div');
-        row.className = 'card' + (m.carry ? ' carry' : '');
-        row.innerHTML = `
-          <span class="slot-idx">${i + 1}</span>
-          <span class="cls-dot" style="color:${classColor(m.class)}"></span>
-          <div class="idn">
-            <div class="cn">${esc(m.charName)}</div>
-            <div class="pn">${esc(m.playerName)} · ${clsHtml(m.class)}</div>
-          </div>
-          <span class="cp">${nfmt(m.cp)}</span>`;
-        slots.appendChild(row);
-      });
-      board.appendChild(card);
+      const g = (p.group && p.group.trim()) || 'ทั่วไป';
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g).push(p);
     });
+    const grouped = order.length > 1 || (order.length === 1 && order[0] !== 'ทั่วไป');
+    if (grouped) {
+      board.classList.add('grouped');
+      order.forEach((g) => {
+        const sec = document.createElement('div');
+        sec.className = 'party-group';
+        const head = document.createElement('div');
+        head.className = 'group-head';
+        head.innerHTML = `<span class="group-name">${esc(g)}</span><span class="group-count">${map.get(g).length} ตี้</span>`;
+        sec.appendChild(head);
+        const grid = document.createElement('div');
+        grid.className = 'board';
+        map.get(g).forEach((p) => grid.appendChild(buildPartyCard(p)));
+        sec.appendChild(grid);
+        board.appendChild(sec);
+      });
+    } else {
+      state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
+    }
     tickCountdowns();
   }
 
