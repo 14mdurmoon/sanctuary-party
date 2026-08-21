@@ -8,8 +8,9 @@
   const saveOwned = () => localStorage.setItem(OWN_KEY, JSON.stringify(owned));
 
   const $ = (id) => document.getElementById(id);
-  const allChars = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
-  const partyOf = (cid) => state.parties.find((p) => p.members.some((m) => m.id === cid));
+  const allChars = () => state.characters || [];
+  const partiesOf = (cid) => state.parties.filter((p) => p.members.some((m) => m.id === cid));
+  const assignedTags = (cid) => partiesOf(cid).map((p) => `<span class="tag assigned">${esc(p.name)}</span>`).join(' ');
 
   // put the party board ABOVE the full roster so parties are seen first
   (function boardFirst() {
@@ -92,13 +93,12 @@
     if (!mine.length) { box.innerHTML = '<p class="empty">ยังไม่ได้ลงชื่อตัวละคร</p>'; return; }
     box.innerHTML = '';
     mine.forEach((c) => {
-      const p = partyOf(c.id);
       const el = document.createElement('div');
       el.className = 'card' + (c.carry ? ' carry' : '');
       el.innerHTML = `
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
-          <div class="cn">${esc(c.charName)} ${p ? `<span class="tag assigned">${esc(p.name)}</span>` : ''}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
+          <div class="cn">${esc(c.charName)} ${assignedTags(c.id)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
           <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
@@ -146,14 +146,14 @@
     if (!chars.length) { box.innerHTML = '<p class="empty">ยังไม่มีใครลงชื่อ</p>'; return; }
     const sorted = [...chars].sort((a, b) => (b.cp || 0) - (a.cp || 0));
     const rows = sorted.map((c) => {
-      const p = partyOf(c.id);
+      const tags = assignedTags(c.id);
       return `<tr>
         <td><span class="cls-dot" style="color:${classColor(c.class)};display:inline-block;margin-right:7px"></span><b>${esc(c.charName)}</b></td>
         <td class="muted">${esc(c.playerName)}</td>
         <td>${clsHtml(c.class)}</td>
         <td>${dungeonTagsHtml(state.groups, c.dungeonIds) || '<span class="muted">—</span>'}</td>
         <td class="num">${nfmt(c.cp)}</td>
-        <td>${p ? `<span class="tag assigned">${esc(p.name)}</span>` : '<span class="tag pool">ยังไม่จัด</span>'}</td>
+        <td>${tags || '<span class="tag pool">ยังไม่จัด</span>'}</td>
       </tr>`;
     }).join('');
     box.innerHTML = `<table class="roster">
@@ -194,7 +194,7 @@
         <span class="slot-idx">${i + 1}</span>
         <span class="cls-dot" style="color:${classColor(m.class)}"></span>
         <div class="idn">
-          <div class="cn">${esc(m.charName)}</div>
+          <div class="cn">${esc(m.charName)}${m.dungeonId ? dungeonTagsHtml(state.groups, [m.dungeonId]) : ''}</div>
           <div class="pn">${esc(m.playerName)} · ${clsHtml(m.class)}</div>
         </div>
         <span class="cp">${nfmt(m.cp)}</span>`;

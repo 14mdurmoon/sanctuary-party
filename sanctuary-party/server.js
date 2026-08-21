@@ -12,7 +12,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [] };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {} };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -21,6 +21,20 @@ try {
   if (!Array.isArray(store.groups)) store.groups = [];
   for (const c of store.characters) {
     if (!Array.isArray(c.dungeonIds)) c.dungeonIds = c.dungeonId ? [c.dungeonId] : [];
+  }
+  if (typeof store.assignments !== 'object' || store.assignments === null) store.assignments = {};
+  if (!store._assignMigrated) {
+    for (const c of store.characters) {
+      if (c.partyId) {
+        const party = store.parties.find((p) => p.id === c.partyId);
+        let d = null;
+        if (c.dungeonIds && c.dungeonIds.length) {
+          d = (party && party.groupId && c.dungeonIds.includes(party.groupId)) ? party.groupId : c.dungeonIds[0];
+        }
+        store.assignments[c.id + '|' + (d || '')] = { partyId: c.partyId, slotOrder: c.slotOrder || 0 };
+      }
+    }
+    store._assignMigrated = true;
   }
 } catch { /* fresh store */ }
 
@@ -58,24 +72,42 @@ function requireAdmin(req, res, next) {
   res.status(401).json({ error: 'unauthorized' });
 }
 
+// a character generates one "placement" per selected dungeon (or one null placement if none)
+function placementsOf(c) {
+  const ds = (Array.isArray(c.dungeonIds) && c.dungeonIds.length) ? c.dungeonIds : [null];
+  return ds.map((d) => ({
+    placementId: c.id + '|' + (d || ''),
+    id: c.id, playerName: c.playerName, charName: c.charName,
+    cp: c.cp, class: c.className, dungeonId: d || null, carry: !!c.carry,
+  }));
+}
+
 function getState() {
-  const chars = [...store.characters].sort(
-    (a, b) => (a.slotOrder - b.slotOrder) || (a.createdAt - b.createdAt)
-  );
   const byParty = {};
   const pool = [];
-  for (const c of chars) {
-    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry };
-    if (c.partyId && findParty(c.partyId)) (byParty[c.partyId] || (byParty[c.partyId] = [])).push(pub);
-    else pool.push(pub);
+  for (const c of store.characters) {
+    for (const pl of placementsOf(c)) {
+      const a = store.assignments[pl.placementId];
+      const order = a && typeof a.slotOrder === 'number' ? a.slotOrder : 0;
+      if (a && a.partyId && findParty(a.partyId)) {
+        (byParty[a.partyId] || (byParty[a.partyId] = [])).push({ pl, order });
+      } else {
+        pool.push({ pl, order });
+      }
+    }
   }
+  const strip = (arr) => arr.sort((x, y) => x.order - y.order).map((o) => o.pl);
   const parties = [...store.parties]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
-    .map((p) => ({ id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
+    .map((p) => ({ id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, members: strip(byParty[p.id] || []) }));
   const groups = [...store.groups]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
     .map((g) => ({ id: g.id, name: g.name }));
-  return { partySize: PARTY_SIZE, pool, parties, groups };
+  const characters = store.characters.map((c) => ({
+    id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp,
+    class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry,
+  }));
+  return { partySize: PARTY_SIZE, characters, pool: strip(pool), parties, groups };
 }
 
 // ---------- app ----------
@@ -169,6 +201,7 @@ app.delete('/api/characters/:id', (req, res) => {
     return res.status(403).json({ error: 'ลบได้เฉพาะตัวละครของคุณ' });
   }
   store.characters = store.characters.filter((x) => x.id !== c.id);
+  for (const k of Object.keys(store.assignments)) if (k.split('|')[0] === c.id) delete store.assignments[k];
   save(); broadcast();
   res.json({ ok: true });
 });
@@ -196,9 +229,10 @@ app.post('/api/admin/ban', requireAdmin, (req, res) => {
   const ip = c.ip || '';
   if (!ip) return res.status(400).json({ error: 'ตัวละครนี้ไม่มีข้อมูล IP (สร้างก่อนเปิดระบบแบน)' });
   if (!store.bans.includes(ip)) store.bans.push(ip);
-  const before = store.characters.length;
+  const removedIds = store.characters.filter((x) => x.ip === ip).map((x) => x.id);
   store.characters = store.characters.filter((x) => x.ip !== ip);
-  const removed = before - store.characters.length;
+  for (const k of Object.keys(store.assignments)) if (removedIds.includes(k.split('|')[0])) delete store.assignments[k];
+  const removed = removedIds.length;
   save(); broadcast();
   res.json({ ip, removed });
 });
@@ -238,7 +272,9 @@ app.put('/api/parties/:id', requireAdmin, (req, res) => {
 });
 
 app.delete('/api/parties/:id', requireAdmin, (req, res) => {
-  for (const c of store.characters) if (c.partyId === req.params.id) c.partyId = null;
+  for (const k of Object.keys(store.assignments)) {
+    if (store.assignments[k] && store.assignments[k].partyId === req.params.id) delete store.assignments[k];
+  }
   store.parties = store.parties.filter((p) => p.id !== req.params.id);
   save(); broadcast();
   res.json({ ok: true });
@@ -294,14 +330,15 @@ app.post('/api/parties/layout', requireAdmin, (req, res) => {
 // body: { pool: [charId...], parties: [{ id, memberIds: [charId...] }] }
 app.post('/api/layout', requireAdmin, (req, res) => {
   const { pool = [], parties = [] } = req.body || {};
+  const charOf = (placementId) => findChar(String(placementId).split('|')[0]);
   for (const p of parties) {
     const ids = p.memberIds || [];
     if (ids.length > PARTY_SIZE) {
       return res.status(400).json({ error: `ตี้ลงได้สูงสุด ${PARTY_SIZE} คน` });
     }
     const seen = new Set();
-    for (const cid of ids) {
-      const c = findChar(cid);
+    for (const plid of ids) {
+      const c = charOf(plid);
       if (!c) continue;
       const key = String(c.playerName || '').trim().toLowerCase();
       if (seen.has(key)) {
@@ -311,12 +348,8 @@ app.post('/api/layout', requireAdmin, (req, res) => {
     }
   }
   let order = 0;
-  const setPos = (id, partyId) => {
-    const c = findChar(id);
-    if (c) { c.partyId = partyId; c.slotOrder = order++; }
-  };
-  pool.forEach((id) => setPos(id, null));
-  for (const p of parties) (p.memberIds || []).forEach((id) => setPos(id, p.id));
+  pool.forEach((plid) => { store.assignments[plid] = { partyId: null, slotOrder: order++ }; });
+  for (const p of parties) (p.memberIds || []).forEach((plid) => { store.assignments[plid] = { partyId: p.id, slotOrder: order++ }; });
   save(); broadcast();
   res.json({ ok: true });
 });

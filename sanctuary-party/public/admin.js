@@ -5,8 +5,8 @@
   let state = { pool: [], parties: [], partySize: 10 };
   let dupWarned = false;
   let adminBans = [];
-  const allChars = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
-  const charById = (id) => allChars().find((c) => c.id === id);
+  const allPlacements = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
+  const placementById = (pid) => allPlacements().find((x) => x.placementId === pid);
   const norm = (nm) => String(nm || '').trim().toLowerCase();
   let dragging = false;
   let pending = null;
@@ -102,21 +102,23 @@
   });
 
   // ---------- render ----------
-  function charCard(c, idx) {
+  function charCard(pl, idx) {
     const div = document.createElement('div');
-    div.className = 'card drag' + (c.carry ? ' carry' : '');
-    div.dataset.id = c.id;
+    div.className = 'card drag' + (pl.carry ? ' carry' : '');
+    div.dataset.id = pl.placementId;
+    div.dataset.charid = pl.id;
+    const dgTag = pl.dungeonId ? dungeonTagsHtml(state.groups, [pl.dungeonId]) : '';
     div.innerHTML =
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
-      `<span class="cls-dot" style="color:${classColor(c.class)}"></span>
+      `<span class="cls-dot" style="color:${classColor(pl.class)}"></span>
        <div class="idn">
-         <div class="cn">${esc(c.charName)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
-         <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
+         <div class="cn">${esc(pl.charName)}${dgTag}</div>
+         <div class="pn">${esc(pl.playerName)} · ${clsHtml(pl.class)}</div>
        </div>
-       <span class="cp">${nfmt(c.cp)}</span>
+       <span class="cp">${nfmt(pl.cp)}</span>
        <div class="acts">
          <button class="icon-btn ban" title="แบน IP คนนี้">🚫</button>
-         <button class="icon-btn del" title="ลบตัวละคร">✕</button>
+         <button class="icon-btn del" title="ลบตัวละคร (ทุกดัน)">✕</button>
        </div>`;
     return div;
   }
@@ -223,11 +225,11 @@
           const to = evt.to;
           if (to.dataset.party && to.dataset.party !== 'pool' && to !== evt.from) {
             if (to.querySelectorAll('[data-id]').length >= state.partySize) return false;
-            const dragged = charById(evt.dragged && evt.dragged.dataset.id);
+            const dragged = placementById(evt.dragged && evt.dragged.dataset.id);
             if (dragged) {
               const dup = [...to.querySelectorAll('[data-id]')].some((el) => {
                 if (el === evt.dragged) return false;
-                const m = charById(el.dataset.id);
+                const m = placementById(el.dataset.id);
                 return m && norm(m.playerName) === norm(dragged.playerName);
               });
               if (dup) {
@@ -293,7 +295,7 @@
     for (const p of layout.parties) {
       const seen = new Set();
       for (const id of p.memberIds) {
-        const c = charById(id);
+        const c = placementById(id);
         if (!c) continue;
         const k = norm(c.playerName);
         if (seen.has(k)) {
@@ -341,7 +343,7 @@
     const ban = e.target.closest('.icon-btn.ban');
     if (ban) {
       const card = ban.closest('[data-id]');
-      const id = card && card.dataset.id;
+      const id = card && card.dataset.charid;
       const name = (card && card.querySelector('.cn') && card.querySelector('.cn').textContent) || 'คนนี้';
       if (id && await SP.confirmModal(`แบน IP ของ "${name}"? ตัวละครทั้งหมดจาก IP นี้จะถูกลบ`, 'แบน')) {
         try { const r = await api('POST', '/api/admin/ban', { charId: id }, authHeaders()); toast(`แบนแล้ว · ลบ ${r.removed} ตัว`); loadBans(); }
@@ -351,8 +353,8 @@
     }
     const del = e.target.closest('.del:not(.p-del)');
     if (del) {
-      const id = del.closest('[data-id]')?.dataset.id;
       const card = del.closest('[data-id]');
+      const id = card && card.dataset.charid;
       const name = card?.querySelector('.cn')?.textContent || 'ตัวละครนี้';
       if (id && await SP.confirmModal(`ลบ "${name}" ออกจากระบบ?`, 'ลบ')) {
         try { await api('DELETE', '/api/characters/' + id, null, authHeaders()); toast('ลบแล้ว'); }
@@ -389,7 +391,7 @@
     const card = e.target.closest('[data-id]');
     if (!card) return;
     e.preventDefault();
-    try { await api('POST', '/api/characters/' + card.dataset.id + '/carry', {}, authHeaders()); }
+    try { await api('POST', '/api/characters/' + card.dataset.charid + '/carry', {}, authHeaders()); }
     catch (err) { toast(err.message, true); }
   });
 
