@@ -173,7 +173,7 @@
   function renderBoard() {
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     const board = $('board');
-    board.classList.remove('kanban');
+    board.classList.remove('grouped');
     if (!state.parties.length) { board.innerHTML = '<p class="empty">แอดมินยังไม่เปิดตี้</p>'; return; }
     board.innerHTML = '';
 

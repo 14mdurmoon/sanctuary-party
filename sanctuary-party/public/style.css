@@ -37,7 +37,7 @@ body {
 a { color: var(--ether); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-.wrap { max-width: 1360px; margin: 0 auto; padding: 22px 18px 80px; }
+.wrap { max-width: min(1760px, 96vw); margin: 0 auto; padding: 22px 18px 80px; }
 
 /* ---- header ---- */
 .masthead {
@@ -196,7 +196,7 @@ input::placeholder { color: var(--faint); }
 .section-count { font-size: .74rem; color: var(--faint); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; margin-right: auto; }
 .section-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
   min-height: 64px;
 }
@@ -282,7 +282,7 @@ input::placeholder { color: var(--faint); }
 .live-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); animation: pulse 2s infinite; }
 .live-dot.off i { background: var(--faint); box-shadow: none; animation: none; }
 
-.cols { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+.cols { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
 .pool-list { min-height: 80px; }
 
 /* keep the "waiting list" pinned while scrolling down through parties (desktop) */
