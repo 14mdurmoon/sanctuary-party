@@ -1,5 +1,5 @@
 (function () {
-  const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonName, toast, api, connect, esc, nfmt } = SP;
+  const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonName, dungeonTagsHtml, toast, api, connect, esc, nfmt } = SP;
   const OWN_KEY = 'sanctuary_owned_v1';
   let owned = {};      // { charId: editToken }
   let state = { pool: [], parties: [], partySize: 10 };
@@ -47,17 +47,21 @@
     const btn = $('addBtn'); if (!btn) return;
     const wrap = document.createElement('div');
     wrap.className = 'field';
-    wrap.innerHTML = '<label for="dungeon">จะลงดันไหน</label><select id="dungeon"></select>';
+    wrap.innerHTML = '<label>จะลงดันไหน (เลือกได้หลายดัน)</label><div id="dungeon" class="dg-checks"></div>';
     btn.parentNode.insertBefore(wrap, btn);
   })();
   function populateDungeons() {
-    const sel = $('dungeon'); if (!sel) return;
-    const cur = sel.value;
-    const opts = ['<option value="">— ยังไม่เลือก —</option>']
-      .concat((state.groups || []).map((g) => `<option value="${g.id}">${esc(g.name)}</option>`));
-    sel.innerHTML = opts.join('');
-    if (cur) sel.value = cur;
+    const cont = $('dungeon'); if (!cont) return;
+    const checked = new Set([...cont.querySelectorAll('input:checked')].map((c) => c.value));
+    const groups = state.groups || [];
+    cont.innerHTML = groups.length
+      ? groups.map((g) => `<label class="dg-chip"><input type="checkbox" value="${g.id}" ${checked.has(g.id) ? 'checked' : ''}><span>${esc(g.name)}</span></label>`).join('')
+      : '<span class="hint">แอดมินยังไม่ตั้งดัน</span>';
   }
+  const readDungeonIds = () => {
+    const cont = $('dungeon');
+    return cont ? [...cont.querySelectorAll('input:checked')].map((c) => c.value) : [];
+  };
 
   // ---- add ----
   async function add() {
@@ -65,11 +69,11 @@
     const charName = $('charName').value.trim();
     const cp = $('cp').value;
     const cls = $('cls').value.trim();
-    const dungeonId = ($('dungeon') && $('dungeon').value) || null;
+    const dungeonIds = readDungeonIds();
     if (!playerName || !charName) { toast('กรอกชื่อคนเล่นและชื่อตัวละคร', true); return; }
     $('addBtn').disabled = true;
     try {
-      const r = await api('POST', '/api/characters', { playerName, charName, cp, class: cls, dungeonId });
+      const r = await api('POST', '/api/characters', { playerName, charName, cp, class: cls, dungeonIds });
       owned[r.id] = r.editToken; saveOwned();
       $('charName').value = ''; $('cp').value = ''; // keep playerName + class for fast multi-add
       $('charName').focus();
@@ -94,7 +98,7 @@
       el.innerHTML = `
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
-          <div class="cn">${esc(c.charName)} ${p ? `<span class="tag assigned">${esc(p.name)}</span>` : ''}${dungeonName(state.groups, c.dungeonId) ? `<span class="tag dungeon">${esc(dungeonName(state.groups, c.dungeonId))}</span>` : ''}</div>
+          <div class="cn">${esc(c.charName)} ${p ? `<span class="tag assigned">${esc(p.name)}</span>` : ''}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
           <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
@@ -109,18 +113,17 @@
   }
 
   async function editChar(c) {
-    const dgOpts = [{ value: '', label: '— ยังไม่เลือก —' }]
-      .concat((state.groups || []).map((g) => ({ value: g.id, label: g.name })));
+    const dgOpts = (state.groups || []).map((g) => ({ value: g.id, label: g.name }));
     const vals = await SP.formModal('แก้ไขตัวละคร', [
       { name: 'charName', label: 'ชื่อตัวละคร', value: c.charName },
       { name: 'cp', label: 'CP', value: c.cp, type: 'number' },
       { name: 'cls', label: 'คลาส', value: c.class || '', list: 'classes' },
-      { name: 'dungeonId', label: 'จะลงดันไหน', type: 'select', value: c.dungeonId || '', options: dgOpts },
+      { name: 'dungeonIds', label: 'จะลงดันไหน (เลือกได้หลายดัน)', type: 'multiselect', value: c.dungeonIds || [], options: dgOpts },
     ], 'บันทึก');
     if (!vals) return;
     try {
       await api('PUT', '/api/characters/' + c.id,
-        { charName: vals.charName, cp: vals.cp, class: vals.cls, dungeonId: vals.dungeonId }, { 'X-Edit-Token': owned[c.id] });
+        { charName: vals.charName, cp: vals.cp, class: vals.cls, dungeonIds: vals.dungeonIds }, { 'X-Edit-Token': owned[c.id] });
       toast('แก้ไขแล้ว');
     } catch (e) { toast(e.message, true); }
   }
@@ -148,7 +151,7 @@
         <td><span class="cls-dot" style="color:${classColor(c.class)};display:inline-block;margin-right:7px"></span><b>${esc(c.charName)}</b></td>
         <td class="muted">${esc(c.playerName)}</td>
         <td>${clsHtml(c.class)}</td>
-        <td>${dungeonName(state.groups, c.dungeonId) ? `<span class="tag dungeon">${esc(dungeonName(state.groups, c.dungeonId))}</span>` : '<span class="muted">—</span>'}</td>
+        <td>${dungeonTagsHtml(state.groups, c.dungeonIds) || '<span class="muted">—</span>'}</td>
         <td class="num">${nfmt(c.cp)}</td>
         <td>${p ? `<span class="tag assigned">${esc(p.name)}</span>` : '<span class="tag pool">ยังไม่จัด</span>'}</td>
       </tr>`;

@@ -103,6 +103,10 @@ window.SP = (function () {
       .sp-body .field{margin-bottom:12px}.sp-body .field:last-child{margin-bottom:0}
       .sp-msg{color:#c9cfe6;font-size:.95rem;line-height:1.5;margin:0}
       .sp-acts{display:flex;gap:10px;padding:0 18px 18px;justify-content:flex-end}
+      .sp-checks{display:flex;flex-wrap:wrap;gap:8px}
+      .sp-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid #2a3358;border-radius:999px;background:#0e1324;cursor:pointer;font-size:.88rem;color:#e7eaf6}
+      .sp-chip input{width:auto;margin:0;accent-color:#63d6ea}
+      .sp-chip:hover{border-color:#2f6f7e}
     `;
     document.head.appendChild(style);
     const el = document.createElement('div');
@@ -135,7 +139,19 @@ window.SP = (function () {
       const wrap = document.createElement('div'); wrap.className = 'field';
       const lab = document.createElement('label'); lab.textContent = f.label; wrap.appendChild(lab);
       let inp;
-      if (f.type === 'select') {
+      if (f.type === 'multiselect') {
+        inp = document.createElement('div');
+        inp.className = 'sp-checks';
+        const chosen = (f.value || []).map(String);
+        if (!(f.options || []).length) inp.innerHTML = '<span class="hint">ยังไม่มีตัวเลือก</span>';
+        (f.options || []).forEach((o) => {
+          const lab = document.createElement('label'); lab.className = 'sp-chip';
+          const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = o.value;
+          if (chosen.includes(String(o.value))) cb.checked = true;
+          const sp = document.createElement('span'); sp.textContent = o.label;
+          lab.appendChild(cb); lab.appendChild(sp); inp.appendChild(lab);
+        });
+      } else if (f.type === 'select') {
         inp = document.createElement('select');
         (f.options || []).forEach((o) => {
           const opt = document.createElement('option');
@@ -161,8 +177,16 @@ window.SP = (function () {
     return new Promise((resolve) => {
       modalResolve = (result) => { el.classList.remove('open'); modalResolve = null; resolve(result); };
       okBtn.onclick = () => {
-        if (opts.fields) { const out = {}; for (const k in inputs) out[k] = inputs[k].value; modalResolve(out); }
-        else modalResolve(true);
+        if (opts.fields) {
+          const out = {};
+          for (const k in inputs) {
+            const el = inputs[k];
+            if (el.classList && el.classList.contains('sp-checks')) {
+              out[k] = [...el.querySelectorAll('input:checked')].map((c) => c.value);
+            } else out[k] = el.value;
+          }
+          modalResolve(out);
+        } else modalResolve(true);
       };
       cancelBtn.onclick = () => modalResolve(opts.fields ? null : false);
       body.querySelectorAll('input').forEach((inp) =>
@@ -180,6 +204,13 @@ window.SP = (function () {
     const g = (groups || []).find((x) => x.id === id);
     return g ? g.name : '';
   };
+  const dungeonTagsHtml = (groups, ids) => {
+    if (!Array.isArray(ids) || !ids.length) return '';
+    return ids.map((id) => dungeonName(groups, id))
+      .filter(Boolean)
+      .map((nm) => `<span class="tag dungeon">${esc(nm)}</span>`)
+      .join(' ');
+  };
 
-  return { fmtCountdown, classColor, isCleric, clsHtml, clericBadge, dungeonName, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
+  return { fmtCountdown, classColor, isCleric, clsHtml, clericBadge, dungeonName, dungeonTagsHtml, toast, api, connect, esc, nfmt, showModal, confirmModal, formModal };
 })();

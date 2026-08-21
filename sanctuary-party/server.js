@@ -19,6 +19,9 @@ try {
   if (!Array.isArray(store.parties)) store.parties = [];
   if (!Array.isArray(store.bans)) store.bans = [];
   if (!Array.isArray(store.groups)) store.groups = [];
+  for (const c of store.characters) {
+    if (!Array.isArray(c.dungeonIds)) c.dungeonIds = c.dungeonId ? [c.dungeonId] : [];
+  }
 } catch { /* fresh store */ }
 
 function save() {
@@ -35,6 +38,13 @@ const now = () => Date.now();
 const findChar = (id) => store.characters.find((c) => c.id === id);
 const findParty = (id) => store.parties.find((p) => p.id === id);
 const findGroup = (id) => store.groups.find((g) => g.id === id);
+const cleanDungeonIds = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const id of arr) { if (id && findGroup(id) && !seen.has(id)) { seen.add(id); out.push(id); } }
+  return out;
+};
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
 if (!process.env.ADMIN_PASSWORD) {
@@ -55,7 +65,7 @@ function getState() {
   const byParty = {};
   const pool = [];
   for (const c of chars) {
-    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className, dungeonId: c.dungeonId || null, carry: !!c.carry };
+    const pub = { id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp, class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry };
     if (c.partyId && findParty(c.partyId)) (byParty[c.partyId] || (byParty[c.partyId] = [])).push(pub);
     else pool.push(pub);
   }
@@ -111,12 +121,12 @@ app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }))
 
 // ---------- characters ----------
 app.post('/api/characters', (req, res) => {
-  let { playerName, charName, cp, class: cls, dungeonId } = req.body || {};
+  let { playerName, charName, cp, class: cls, dungeonIds } = req.body || {};
   playerName = String(playerName || '').trim().slice(0, 40);
   charName = String(charName || '').trim().slice(0, 40);
   cls = String(cls || '').trim().slice(0, 40);
   cp = Math.max(0, parseInt(cp, 10) || 0);
-  dungeonId = (dungeonId && findGroup(dungeonId)) ? dungeonId : null;
+  dungeonIds = cleanDungeonIds(dungeonIds);
   if (!playerName || !charName) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อคนเล่นและชื่อตัวละคร' });
   }
@@ -126,7 +136,7 @@ app.post('/api/characters', (req, res) => {
   }
   const maxOrder = store.characters.reduce((m, c) => Math.max(m, c.slotOrder || 0), 0);
   const ch = {
-    id: rid(), playerName, charName, cp, className: cls, dungeonId,
+    id: rid(), playerName, charName, cp, className: cls, dungeonIds,
     partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(), ip,
   };
   store.characters.push(ch);
@@ -141,12 +151,12 @@ app.put('/api/characters/:id', (req, res) => {
   if (token !== c.editToken && !isAdmin(req)) {
     return res.status(403).json({ error: 'แก้ไขได้เฉพาะตัวละครของคุณ' });
   }
-  let { playerName, charName, cp, class: cls, dungeonId } = req.body || {};
+  let { playerName, charName, cp, class: cls, dungeonIds } = req.body || {};
   if (playerName !== undefined) c.playerName = String(playerName).trim().slice(0, 40) || c.playerName;
   if (charName !== undefined) c.charName = String(charName).trim().slice(0, 40) || c.charName;
   if (cls !== undefined) c.className = String(cls).trim().slice(0, 40);
   if (cp !== undefined) c.cp = Math.max(0, parseInt(cp, 10) || 0);
-  if (dungeonId !== undefined) c.dungeonId = (dungeonId && findGroup(dungeonId)) ? dungeonId : null;
+  if (dungeonIds !== undefined) c.dungeonIds = cleanDungeonIds(dungeonIds);
   save(); broadcast();
   res.json({ ok: true });
 });

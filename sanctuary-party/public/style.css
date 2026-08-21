@@ -173,6 +173,10 @@ input::placeholder { color: var(--faint); }
 .tag.assigned { color: var(--good); border-color: rgba(111,224,168,.3); background: rgba(111,224,168,.08); }
 .tag.pool { color: var(--faint); }
 .tag.dungeon { color: var(--ether); border-color: rgba(99,214,234,.32); background: rgba(99,214,234,.08); margin-left: 6px; font-size: .68rem; vertical-align: middle; }
+.dg-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.dg-chip { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--void-2); cursor: pointer; font-size: .88rem; color: var(--text); }
+.dg-chip input { width: auto; margin: 0; accent-color: var(--ether); }
+.dg-chip:hover { border-color: var(--ether-dim); }
 .tag.ok { color: #4fe0a1; border-color: rgba(79,224,161,.32); background: rgba(79,224,161,.09); }
 .tag.warn { color: #ffb454; border-color: rgba(255,180,84,.38); background: rgba(255,180,84,.1); }
 .p-badges { margin-top: 8px; }

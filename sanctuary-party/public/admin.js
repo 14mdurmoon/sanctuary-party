@@ -1,5 +1,5 @@
 (function () {
-  const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonName, toast, api, connect, esc, nfmt } = SP;
+  const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonTagsHtml, toast, api, connect, esc, nfmt } = SP;
   const TOKEN_KEY = 'sanctuary_admin_token';
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
@@ -110,7 +110,7 @@
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
       `<span class="cls-dot" style="color:${classColor(c.class)}"></span>
        <div class="idn">
-         <div class="cn">${esc(c.charName)}${dungeonName(state.groups, c.dungeonId) ? `<span class="tag dungeon">${esc(dungeonName(state.groups, c.dungeonId))}</span>` : ''}</div>
+         <div class="cn">${esc(c.charName)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
          <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
        </div>
        <span class="cp">${nfmt(c.cp)}</span>
