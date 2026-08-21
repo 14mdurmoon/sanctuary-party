@@ -11,6 +11,36 @@
   const allChars = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
   const partyOf = (cid) => state.parties.find((p) => p.members.some((m) => m.id === cid));
 
+  // put the party board ABOVE the full roster so parties are seen first
+  (function boardFirst() {
+    const board = document.getElementById('board');
+    const roster = document.getElementById('roster');
+    if (!board || !roster) return;
+    const boardSec = board.closest('.panel');
+    const rosterSec = roster.closest('.panel');
+    if (boardSec && rosterSec && boardSec.parentNode === rosterSec.parentNode) {
+      rosterSec.parentNode.insertBefore(boardSec, rosterSec);
+    }
+  })();
+
+  // collapse the long "รายชื่อทั้งหมด" list by default (toggle to show)
+  (function collapsibleRoster() {
+    const roster = document.getElementById('roster');
+    if (!roster) return;
+    const panel = roster.closest('.panel');
+    const head = panel && panel.querySelector('.head');
+    const body = panel && panel.querySelector('.body');
+    if (!head || !body || head.querySelector('.roster-toggle')) return;
+    let open = false;
+    body.style.display = 'none';
+    const btn = document.createElement('button');
+    btn.className = 'btn ghost small roster-toggle';
+    const sync = () => { btn.textContent = open ? 'ซ่อน' : 'แสดง'; };
+    sync();
+    btn.addEventListener('click', () => { open = !open; body.style.display = open ? '' : 'none'; sync(); });
+    head.appendChild(btn);
+  })();
+
   // inject "จะลงดันไหน" selector into the signup form (kept out of index.html)
   (function injectDungeon() {
     if (document.getElementById('dungeon')) return;
