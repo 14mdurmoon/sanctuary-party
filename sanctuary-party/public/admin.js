@@ -107,13 +107,16 @@
     div.className = 'card drag' + (pl.carry ? ' carry' : '');
     div.dataset.id = pl.placementId;
     div.dataset.charid = pl.id;
-    const dgTag = pl.dungeonId ? dungeonTagsHtml(state.groups, [pl.dungeonId]) : '';
+    const dgTag = pl.dungeonId
+      ? dungeonTagsHtml(state.groups, [pl.dungeonId])
+      : '<span class="tag pool">ไม่ระบุดัน</span>';
     div.innerHTML =
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
       `<span class="cls-dot" style="color:${classColor(pl.class)}"></span>
        <div class="idn">
-         <div class="cn">${esc(pl.charName)}${dgTag}</div>
+         <div class="cn">${esc(pl.charName)}</div>
          <div class="pn">${esc(pl.playerName)} · ${clsHtml(pl.class)}</div>
+         <div class="dg-line">${dgTag}</div>
        </div>
        <span class="cp">${nfmt(pl.cp)}</span>
        <div class="acts">

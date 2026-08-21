@@ -74,7 +74,8 @@ function requireAdmin(req, res, next) {
 
 // a character generates one "placement" per selected dungeon (or one null placement if none)
 function placementsOf(c) {
-  const ds = (Array.isArray(c.dungeonIds) && c.dungeonIds.length) ? c.dungeonIds : [null];
+  const valid = (Array.isArray(c.dungeonIds) ? c.dungeonIds : []).filter((d) => findGroup(d));
+  const ds = valid.length ? valid : [null];
   return ds.map((d) => ({
     placementId: c.id + '|' + (d || ''),
     id: c.id, playerName: c.playerName, charName: c.charName,
