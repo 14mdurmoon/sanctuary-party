@@ -188,10 +188,12 @@
 
     // if no categories exist at all, keep the simple wrapping grid
     if (!groups.length) {
+      board.classList.remove('sectioned');
       state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
       tickCountdowns();
       return;
     }
+    board.classList.add('sectioned');
 
     const makeSection = (gid, title) => {
       const parties = byGroup.get(gid) || [];

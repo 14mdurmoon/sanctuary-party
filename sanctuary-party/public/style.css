@@ -179,6 +179,7 @@ input::placeholder { color: var(--faint); }
 
 /* ---- party board ---- */
 .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.board.sectioned { display: block; }
 
 /* category = horizontal row: label on the LEFT, parties flow to the RIGHT (matches sketch) */
 .party-section {
@@ -193,7 +194,6 @@ input::placeholder { color: var(--faint); }
   border-top: 1px solid var(--line-soft);
 }
 .section-head {
-  position: sticky; top: 16px;
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   padding: 4px 0; margin: 0; border: none;
 }

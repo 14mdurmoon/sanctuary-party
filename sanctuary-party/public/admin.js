@@ -136,6 +136,7 @@
     const board = $('board');
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     board.innerHTML = '';
+    board.classList.add('sectioned');
 
     const groups = state.groups || [];
     const byGroup = new Map();
