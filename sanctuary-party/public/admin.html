@@ -47,17 +47,12 @@
   <!-- console -->
   <div id="console" style="display:none">
     <section class="panel" style="margin-bottom:18px">
-      <div class="head"><h2>เปิดตี้ใหม่</h2></div>
+      <div class="head"><h2>เปิดตี้ / สร้างหมวด</h2></div>
       <div class="body">
         <div class="grid-form">
-          <div class="field full">
-            <label for="pGroup">หมวด (เช่น Sanc 2) — เว้นว่างได้</label>
-            <input id="pGroup" list="groups" placeholder="เช่น Sanc 2" autocomplete="off" />
-            <datalist id="groups"></datalist>
-          </div>
           <div class="field">
             <label for="pName">ชื่อตี้</label>
-            <input id="pName" placeholder="เช่น Sanctuary รอบ 1" />
+            <input id="pName" placeholder="เช่น รอบ 1" />
           </div>
           <div class="field">
             <label for="pTime">เวลาเริ่มลง (ไม่บังคับ)</label>
@@ -65,6 +60,13 @@
           </div>
         </div>
         <button class="btn gold" id="createParty">+ สร้างตี้</button>
+        <hr class="divider" />
+        <div class="field">
+          <label for="gName">ชื่อหมวดหมู่ (เช่น Sanc 2)</label>
+          <input id="gName" placeholder="เช่น Sanc 2" />
+        </div>
+        <button class="btn primary" id="createGroup">+ สร้างหมวด</button>
+        <p class="hint" style="margin:10px 0 0">สร้างหมวดแล้วลากตี้ (จับที่ ⠿ บนหัวตี้) เข้าไปในหมวดได้เลย</p>
       </div>
     </section>
 

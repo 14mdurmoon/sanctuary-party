@@ -178,23 +178,56 @@ input::placeholder { color: var(--faint); }
 
 /* ---- party board ---- */
 .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.board.grouped { display: block; }
-.party-group + .party-group { margin-top: 26px; }
-.group-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  margin: 0 0 14px; padding: 4px 4px 10px; border-bottom: 1px solid var(--line);
+
+/* kanban: categories as columns laid out horizontally, scroll right */
+.board.kanban {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scroll-snap-type: x proximity;
 }
-.group-name {
-  font-family: "Cinzel", "Sarabun", serif; font-size: 1.08rem; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase; color: #f2f5ff;
+.kanban-col {
+  flex: 0 0 300px;
+  max-width: 300px;
+  background: rgba(20,26,46,.45);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 10px;
+  scroll-snap-align: start;
 }
-.group-name::before {
-  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px;
-  border-radius: 2px; transform: rotate(45deg);
-  background: linear-gradient(135deg, var(--ether), var(--gold));
-  box-shadow: 0 0 10px rgba(99,214,234,.5);
+.kanban-col.ungrouped { background: rgba(20,26,46,.2); border-style: dashed; }
+.kanban-col-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 6px 10px; margin-bottom: 8px; border-bottom: 1px solid var(--line);
 }
-.group-count { font-size: .74rem; color: var(--faint); letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+.kc-title {
+  font-family: "Cinzel", "Sarabun", serif; font-weight: 700; font-size: .96rem;
+  letter-spacing: .06em; text-transform: uppercase; color: #f2f5ff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.kc-title.g-edit { cursor: pointer; }
+.kc-title.g-edit:hover { color: var(--ether); }
+.kanban-col.ungrouped .kc-title { color: var(--faint); font-family: "Sarabun", sans-serif; letter-spacing: .02em; }
+.kc-meta { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.kc-count {
+  font-family: ui-monospace, monospace; font-size: .74rem; color: var(--muted);
+  background: var(--void-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
+.kanban-col-body { min-height: 70px; display: flex; flex-direction: column; gap: 12px; }
+.kanban-col-body:empty::after,
+.kanban-col-body.sortable-empty::after {
+  content: "ลากตี้มาที่นี่"; display: block; text-align: center; color: var(--faint);
+  font-size: .8rem; padding: 18px 6px; border: 1px dashed var(--line); border-radius: 10px;
+}
+.kanban-col .party { width: 100%; }
+.party-handle {
+  cursor: grab; color: var(--faint); font-size: 1rem; line-height: 1;
+  padding: 0 2px; user-select: none; flex: none;
+}
+.party-handle:active { cursor: grabbing; }
+.party-handle:hover { color: var(--ether); }
 .party {
   background: linear-gradient(180deg, rgba(23,30,55,.95), rgba(13,18,34,.95));
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -206,6 +239,7 @@ input::placeholder { color: var(--faint); }
 }
 .party .p-head { padding: 14px 15px 12px; border-bottom: 1px solid var(--line-soft); }
 .party .p-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.party .p-title-row .p-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .party .p-name { font-family: "Cinzel", "Sarabun", serif; font-weight: 700; font-size: 1.02rem; letter-spacing: .04em; color: #f3f5ff; }
 .party .p-name input { font-family: "Sarabun", sans-serif; font-size: .95rem; padding: 5px 8px; }
 .party .fill { display: flex; align-items: center; gap: 8px; margin-top: 10px; }

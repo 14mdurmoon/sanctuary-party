@@ -150,35 +150,44 @@
   function renderBoard() {
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     const board = $('board');
-    board.classList.remove('grouped');
+    board.classList.remove('kanban');
     if (!state.parties.length) { board.innerHTML = '<p class="empty">แอดมินยังไม่เปิดตี้</p>'; return; }
     board.innerHTML = '';
-    const order = [];
-    const map = new Map();
+
+    const groups = state.groups || [];
+    const byGroup = new Map();
+    byGroup.set('none', []);
+    groups.forEach((g) => byGroup.set(g.id, []));
     state.parties.forEach((p) => {
-      const g = (p.group && p.group.trim()) || 'ทั่วไป';
-      if (!map.has(g)) { map.set(g, []); order.push(g); }
-      map.get(g).push(p);
+      const key = (p.groupId && byGroup.has(p.groupId)) ? p.groupId : 'none';
+      byGroup.get(key).push(p);
     });
-    const grouped = order.length > 1 || (order.length === 1 && order[0] !== 'ทั่วไป');
-    if (grouped) {
-      board.classList.add('grouped');
-      order.forEach((g) => {
-        const sec = document.createElement('div');
-        sec.className = 'party-group';
-        const head = document.createElement('div');
-        head.className = 'group-head';
-        head.innerHTML = `<span class="group-name">${esc(g)}</span><span class="group-count">${map.get(g).length} ตี้</span>`;
-        sec.appendChild(head);
-        const grid = document.createElement('div');
-        grid.className = 'board';
-        map.get(g).forEach((p) => grid.appendChild(buildPartyCard(p)));
-        sec.appendChild(grid);
-        board.appendChild(sec);
-      });
-    } else {
+
+    // if no categories exist at all, keep the simple wrapping grid
+    if (!groups.length) {
       state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
+      tickCountdowns();
+      return;
     }
+
+    board.classList.add('kanban');
+    const makeCol = (gid, title) => {
+      const parties = byGroup.get(gid) || [];
+      const col = document.createElement('div');
+      col.className = 'kanban-col' + (gid === 'none' ? ' ungrouped' : '');
+      col.innerHTML = `
+        <div class="kanban-col-head">
+          <span class="kc-title">${esc(title)}</span>
+          <span class="kc-meta"><span class="kc-count">${parties.length}</span></span>
+        </div>
+        <div class="kanban-col-body"></div>`;
+      const body = col.querySelector('.kanban-col-body');
+      parties.forEach((p) => body.appendChild(buildPartyCard(p)));
+      return col;
+    };
+    const ungrouped = byGroup.get('none') || [];
+    if (ungrouped.length) board.appendChild(makeCol('none', 'ยังไม่จัดหมวด'));
+    groups.forEach((g) => board.appendChild(makeCol(g.id, g.name)));
     tickCountdowns();
   }
 

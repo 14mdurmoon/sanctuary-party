@@ -81,12 +81,23 @@
   // ---------- create party ----------
   $('createParty').addEventListener('click', async () => {
     const name = $('pName').value.trim() || 'ตี้ใหม่';
-    const group = $('pGroup').value.trim();
     const startTime = fromLocalInput($('pTime').value);
     try {
-      await api('POST', '/api/parties', { name, group, startTime }, authHeaders());
+      await api('POST', '/api/parties', { name, startTime }, authHeaders());
       $('pName').value = ''; $('pTime').value = '';
       toast('สร้างตี้แล้ว');
+    } catch (e) { toast(e.message, true); }
+  });
+
+  $('pName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createParty').click(); });
+  $('gName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('createGroup').click(); });
+  $('createGroup').addEventListener('click', async () => {
+    const name = $('gName').value.trim();
+    if (!name) { toast('ใส่ชื่อหมวด', true); return; }
+    try {
+      await api('POST', '/api/groups', { name }, authHeaders());
+      $('gName').value = '';
+      toast('สร้างหมวดแล้ว');
     } catch (e) { toast(e.message, true); }
   });
 
@@ -121,48 +132,42 @@
     if (!state.pool.length) pool.innerHTML = '<div class="empty-hint">ทุกคนถูกจัดลงตี้แล้ว</div>';
     $('poolCount').textContent = `${state.pool.length} คน`;
 
-    // board (grouped by p.group)
+    // board = kanban columns (categories, laid out horizontally + an "ungrouped" column)
     const board = $('board');
     $('partyCount').textContent = `${state.parties.length} ตี้`;
     board.innerHTML = '';
-    board.classList.remove('grouped');
-    if (!state.parties.length) {
-      board.innerHTML = '<p class="empty">ยังไม่มีตี้ — สร้างด้านบน</p>';
-    } else {
-      const order = [];
-      const map = new Map();
-      state.parties.forEach((p) => {
-        const g = (p.group && p.group.trim()) || 'ทั่วไป';
-        if (!map.has(g)) { map.set(g, []); order.push(g); }
-        map.get(g).push(p);
-      });
-      const grouped = order.length > 1 || (order.length === 1 && order[0] !== 'ทั่วไป');
-      if (grouped) {
-        board.classList.add('grouped');
-        order.forEach((g) => {
-          const sec = document.createElement('div');
-          sec.className = 'party-group';
-          const head = document.createElement('div');
-          head.className = 'group-head';
-          head.innerHTML = `<span class="group-name">${esc(g)}</span><span class="group-count">${map.get(g).length} ตี้</span>`;
-          sec.appendChild(head);
-          const grid = document.createElement('div');
-          grid.className = 'board';
-          map.get(g).forEach((p) => grid.appendChild(buildPartyCard(p)));
-          sec.appendChild(grid);
-          board.appendChild(sec);
-        });
-      } else {
-        state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
-      }
-    }
+    board.classList.add('kanban');
 
-    // groups datalist for quick reuse when creating
-    const gl = $('groups');
-    if (gl) {
-      const uniq = [...new Set(state.parties.map((p) => (p.group || '').trim()).filter(Boolean))];
-      gl.innerHTML = uniq.map((g) => `<option value="${esc(g)}"></option>`).join('');
-    }
+    const groups = state.groups || [];
+    const byGroup = new Map();
+    byGroup.set('none', []);
+    groups.forEach((g) => byGroup.set(g.id, []));
+    state.parties.forEach((p) => {
+      const key = (p.groupId && byGroup.has(p.groupId)) ? p.groupId : 'none';
+      byGroup.get(key).push(p);
+    });
+
+    const makeCol = (gid, title, deletable) => {
+      const col = document.createElement('div');
+      col.className = 'kanban-col' + (gid === 'none' ? ' ungrouped' : '');
+      const parties = byGroup.get(gid) || [];
+      col.innerHTML = `
+        <div class="kanban-col-head">
+          <span class="kc-title ${deletable ? 'g-edit' : ''}" ${deletable ? `data-gid="${gid}" title="คลิกเพื่อแก้ชื่อหมวด"` : ''}>${esc(title)}</span>
+          <span class="kc-meta">
+            <span class="kc-count">${parties.length}</span>
+            ${deletable ? `<button class="icon-btn del g-del" data-gid="${gid}" title="ลบหมวด">✕</button>` : ''}
+          </span>
+        </div>
+        <div class="kanban-col-body" data-group="${gid}"></div>`;
+      const body = col.querySelector('.kanban-col-body');
+      parties.forEach((p) => body.appendChild(buildPartyCard(p)));
+      return col;
+    };
+
+    // ungrouped first, then each category (in order)
+    board.appendChild(makeCol('none', 'ยังไม่จัดหมวด', false));
+    groups.forEach((g) => board.appendChild(makeCol(g.id, g.name, true)));
 
     initSortables();
     tickCountdowns();
@@ -177,7 +182,8 @@
     card.innerHTML = `
       <div class="p-head">
         <div class="p-title-row">
-          <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ/หมวด">${esc(p.name)}</span>
+          <span class="party-handle" title="ลากย้ายหมวด">⠿</span>
+          <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ">${esc(p.name)}</span>
           <button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>
         </div>
         <div class="fill ${full ? 'full' : ''}">
@@ -203,8 +209,9 @@
 
   // ---------- drag & drop ----------
   function initSortables() {
-    const lists = [$('pool'), ...document.querySelectorAll('.slots[data-party]')];
-    lists.forEach((el) => {
+    // member-level: pool + each party's slots
+    const memberLists = [$('pool'), ...document.querySelectorAll('.slots[data-party]')];
+    memberLists.forEach((el) => {
       sortables.push(new Sortable(el, {
         group: 'sanctuary',
         animation: 150,
@@ -239,6 +246,38 @@
         },
       }));
     });
+
+    // party-level: drag whole parties between category columns (via handle)
+    document.querySelectorAll('.kanban-col-body').forEach((el) => {
+      sortables.push(new Sortable(el, {
+        group: 'parties',
+        handle: '.party-handle',
+        animation: 150,
+        draggable: '.party',
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        onStart: () => { dragging = true; },
+        onEnd: async () => {
+          try { await syncPartyLayout(); }
+          finally { dragging = false; if (pending) { state = pending; pending = null; render(); } }
+        },
+      }));
+    });
+  }
+
+  function collectPartyLayout() {
+    const columns = [...document.querySelectorAll('.kanban-col-body')].map((col) => ({
+      groupId: col.dataset.group === 'none' ? null : col.dataset.group,
+      partyIds: [...col.children].filter((el) => el.dataset && el.dataset.pid).map((el) => el.dataset.pid),
+    }));
+    const groupOrder = (state.groups || []).map((g) => g.id);
+    return { columns, groupOrder };
+  }
+
+  async function syncPartyLayout() {
+    try { await api('POST', '/api/parties/layout', collectPartyLayout(), authHeaders()); }
+    catch (e) { toast(e.message, true); render(); }
   }
 
   function collectLayout() {
@@ -273,6 +312,28 @@
 
   // ---------- delegated controls ----------
   $('console').addEventListener('click', async (e) => {
+    const gdel = e.target.closest('.g-del');
+    if (gdel) {
+      const gid = gdel.dataset.gid;
+      if (await SP.confirmModal('ลบหมวดนี้? ตี้ในหมวดจะย้ายไปช่อง "ยังไม่จัดหมวด"', 'ลบหมวด')) {
+        try { await api('DELETE', '/api/groups/' + gid, null, authHeaders()); toast('ลบหมวดแล้ว'); }
+        catch (err) { toast(err.message, true); }
+      }
+      return;
+    }
+    const gedit = e.target.closest('.g-edit');
+    if (gedit) {
+      const gid = gedit.dataset.gid;
+      const cur = (state.groups || []).find((g) => g.id === gid);
+      const vals = await SP.formModal('เปลี่ยนชื่อหมวด', [
+        { name: 'name', label: 'ชื่อหมวด', value: cur ? cur.name : '' },
+      ], 'บันทึก');
+      if (vals && vals.name) {
+        try { await api('PUT', '/api/groups/' + gid, { name: vals.name }, authHeaders()); }
+        catch (err) { toast(err.message, true); }
+      }
+      return;
+    }
     const unban = e.target.closest('.unban');
     if (unban) {
       try { await api('POST', '/api/admin/unban', { ip: unban.dataset.ip }, authHeaders()); toast('ปลดแบนแล้ว'); loadBans(); }
@@ -314,12 +375,11 @@
     if (pedit) {
       const pid = pedit.dataset.pid;
       const cur = state.parties.find((p) => p.id === pid);
-      const vals = await SP.formModal('แก้ไขตี้', [
+      const vals = await SP.formModal('เปลี่ยนชื่อตี้', [
         { name: 'name', label: 'ชื่อตี้', value: cur ? cur.name : '' },
-        { name: 'group', label: 'หมวด (เว้นว่าง = ทั่วไป)', value: cur ? (cur.group || '') : '' },
       ], 'บันทึก');
       if (vals && vals.name != null) {
-        try { await api('PUT', '/api/parties/' + pid, { name: vals.name, group: vals.group }, authHeaders()); }
+        try { await api('PUT', '/api/parties/' + pid, { name: vals.name }, authHeaders()); }
         catch (err) { toast(err.message, true); }
       }
     }

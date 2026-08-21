@@ -12,12 +12,13 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [] };
+let store = { characters: [], parties: [], bans: [], groups: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
   if (!Array.isArray(store.parties)) store.parties = [];
   if (!Array.isArray(store.bans)) store.bans = [];
+  if (!Array.isArray(store.groups)) store.groups = [];
 } catch { /* fresh store */ }
 
 function save() {
@@ -33,6 +34,7 @@ const rid = () => crypto.randomBytes(9).toString('hex');
 const now = () => Date.now();
 const findChar = (id) => store.characters.find((c) => c.id === id);
 const findParty = (id) => store.parties.find((p) => p.id === id);
+const findGroup = (id) => store.groups.find((g) => g.id === id);
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin1234';
 if (!process.env.ADMIN_PASSWORD) {
@@ -59,8 +61,11 @@ function getState() {
   }
   const parties = [...store.parties]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
-    .map((p) => ({ id: p.id, name: p.name, group: p.group || '', startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
-  return { partySize: PARTY_SIZE, pool, parties };
+    .map((p) => ({ id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, members: byParty[p.id] || [] }));
+  const groups = [...store.groups]
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
+    .map((g) => ({ id: g.id, name: g.name }));
+  return { partySize: PARTY_SIZE, pool, parties, groups };
 }
 
 // ---------- app ----------
@@ -195,12 +200,12 @@ app.post('/api/admin/unban', requireAdmin, (req, res) => {
 
 // ---------- parties (admin only) ----------
 app.post('/api/parties', requireAdmin, (req, res) => {
-  const { name, startTime, group } = req.body || {};
+  const { name, startTime, groupId } = req.body || {};
   const maxOrder = store.parties.reduce((m, p) => Math.max(m, p.sortOrder || 0), 0);
   const p = {
     id: rid(),
     name: String(name || 'ตี้ใหม่').trim().slice(0, 40) || 'ตี้ใหม่',
-    group: String(group || '').trim().slice(0, 40),
+    groupId: (groupId && findGroup(groupId)) ? groupId : null,
     startTime: startTime ? Number(startTime) : null,
     sortOrder: maxOrder + 1, createdAt: now(),
   };
@@ -212,9 +217,9 @@ app.post('/api/parties', requireAdmin, (req, res) => {
 app.put('/api/parties/:id', requireAdmin, (req, res) => {
   const p = findParty(req.params.id);
   if (!p) return res.status(404).json({ error: 'ไม่พบตี้' });
-  const { name, startTime, group } = req.body || {};
+  const { name, startTime, groupId } = req.body || {};
   if (name !== undefined) p.name = String(name).trim().slice(0, 40) || p.name;
-  if (group !== undefined) p.group = String(group).trim().slice(0, 40);
+  if (groupId !== undefined) p.groupId = (groupId && findGroup(groupId)) ? groupId : null;
   if (startTime !== undefined) p.startTime = startTime ? Number(startTime) : null;
   save(); broadcast();
   res.json({ ok: true });
@@ -223,6 +228,52 @@ app.put('/api/parties/:id', requireAdmin, (req, res) => {
 app.delete('/api/parties/:id', requireAdmin, (req, res) => {
   for (const c of store.characters) if (c.partyId === req.params.id) c.partyId = null;
   store.parties = store.parties.filter((p) => p.id !== req.params.id);
+  save(); broadcast();
+  res.json({ ok: true });
+});
+
+// ---------- groups / categories (admin only) ----------
+app.post('/api/groups', requireAdmin, (req, res) => {
+  const { name } = req.body || {};
+  const maxOrder = store.groups.reduce((m, g) => Math.max(m, g.sortOrder || 0), 0);
+  const g = { id: rid(), name: String(name || 'หมวดใหม่').trim().slice(0, 40) || 'หมวดใหม่', sortOrder: maxOrder + 1, createdAt: now() };
+  store.groups.push(g);
+  save(); broadcast();
+  res.json({ id: g.id });
+});
+
+app.put('/api/groups/:id', requireAdmin, (req, res) => {
+  const g = findGroup(req.params.id);
+  if (!g) return res.status(404).json({ error: 'ไม่พบหมวด' });
+  const { name } = req.body || {};
+  if (name !== undefined) g.name = String(name).trim().slice(0, 40) || g.name;
+  save(); broadcast();
+  res.json({ ok: true });
+});
+
+app.delete('/api/groups/:id', requireAdmin, (req, res) => {
+  for (const p of store.parties) if (p.groupId === req.params.id) p.groupId = null;
+  store.groups = store.groups.filter((g) => g.id !== req.params.id);
+  save(); broadcast();
+  res.json({ ok: true });
+});
+
+// drag parties between categories (admin only)
+// body: { columns: [{ groupId: id|null, partyIds: [id...] }], groupOrder: [id...] }
+app.post('/api/parties/layout', requireAdmin, (req, res) => {
+  const { columns = [], groupOrder = [] } = req.body || {};
+  let order = 0;
+  for (const col of columns) {
+    const gid = col.groupId && findGroup(col.groupId) ? col.groupId : null;
+    for (const pid of col.partyIds || []) {
+      const p = findParty(pid);
+      if (p) { p.groupId = gid; p.sortOrder = order++; }
+    }
+  }
+  if (Array.isArray(groupOrder) && groupOrder.length) {
+    let go = 0;
+    for (const gid of groupOrder) { const g = findGroup(gid); if (g) g.sortOrder = go++; }
+  }
   save(); broadcast();
   res.json({ ok: true });
 });
