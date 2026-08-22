@@ -117,8 +117,9 @@
       `<span class="cls-dot" style="color:${classColor(pl.class)}"></span>
        <div class="idn">
          <div class="cn">${esc(pl.charName)}</div>
-         <div class="pn"><span class="cls-line" style="color:${classColor(pl.class)}">${esc(pl.class || '—')}</span>${pl.playerName ? `<span class="owner">· ${esc(pl.playerName)}</span>` : ''}</div>
+         <div class="pn"><span class="cls-line" style="color:${classColor(pl.class)}">${esc(pl.class || '—')}</span></div>
          <div class="dg-line">${dgTag}</div>
+         ${pl.playerName ? `<div class="owner-line">${esc(pl.playerName)}</div>` : ''}
        </div>
        <span class="cp">${nfmt(pl.cp)}</span>
        <div class="acts">

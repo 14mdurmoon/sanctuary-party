@@ -135,9 +135,9 @@ input::placeholder { color: var(--faint); }
 .card .dg-line { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; }
 .card .dg-line .tag { margin-left: 0; }
 .card .idn .cn { font-weight: 700; font-size: .95rem; color: #f1f4ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card .idn .pn { font-size: .78rem; display: flex; align-items: baseline; gap: 5px; }
-.card .idn .cls-line { flex: none; font-weight: 600; }
-.card .idn .owner { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.card .idn .pn { font-size: .78rem; }
+.card .idn .cls-line { font-weight: 600; }
+.card .idn .owner-line { margin-top: 2px; text-align: right; font-size: .7rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .idn .pn { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .cls { font-size: .78rem; color: var(--violet); }
 .card .cp {
