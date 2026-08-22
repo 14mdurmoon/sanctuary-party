@@ -12,7 +12,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [] };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {} };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -25,6 +25,7 @@ try {
   if (typeof store.assignments !== 'object' || store.assignments === null) store.assignments = {};
   if (!Array.isArray(store.log)) store.log = [];
   if (!Array.isArray(store.history)) store.history = [];
+  if (typeof store.sessions !== 'object' || store.sessions === null) store.sessions = {};
   if (!store._assignMigrated) {
     for (const c of store.characters) {
       if (c.partyId) {
@@ -71,6 +72,30 @@ if (!process.env.ADMIN_PASSWORD) {
   console.warn('[warn] ADMIN_PASSWORD not set — using default "admin1234". Set it in Railway variables!');
 }
 const adminTokens = new Set();
+
+// ---------- Discord OAuth (optional) ----------
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
+const DISCORD_ENABLED = !!(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET);
+const ADMIN_DISCORD_IDS = (process.env.ADMIN_DISCORD_IDS || '').split(',').map((x) => x.trim()).filter(Boolean);
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach((p) => {
+    const i = p.indexOf('=');
+    if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+function currentUser(req) {
+  const sid = parseCookies(req).sid;
+  if (!sid) return null;
+  return store.sessions[sid] || null;
+}
+function redirectUri(req) {
+  if (process.env.DISCORD_REDIRECT_URI) return process.env.DISCORD_REDIRECT_URI;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  return `${proto}://${req.headers.host}/auth/discord/callback`;
+}
 const bearer = (req) => (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
 const isAdmin = (req) => adminTokens.has(bearer(req));
 function requireAdmin(req, res, next) {
@@ -168,6 +193,86 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
 });
 app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }));
+
+// ---------- Discord auth routes ----------
+app.get('/auth/me', (req, res) => {
+  const u = currentUser(req);
+  res.json({
+    enabled: DISCORD_ENABLED,
+    user: u ? { discordId: u.discordId, name: u.name, avatar: u.avatar || '', admin: ADMIN_DISCORD_IDS.includes(u.discordId) } : null,
+  });
+});
+
+app.get('/auth/discord', (req, res) => {
+  if (!DISCORD_ENABLED) return res.status(404).send('Discord login is not configured');
+  const state = rid();
+  const https = (req.headers['x-forwarded-proto'] || req.protocol) === 'https';
+  res.cookie('oauth_state', state, { httpOnly: true, sameSite: 'lax', maxAge: 600000, secure: https });
+  const url = 'https://discord.com/api/oauth2/authorize?' + new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    redirect_uri: redirectUri(req),
+    response_type: 'code',
+    scope: 'identify',
+    state,
+  }).toString();
+  res.redirect(url);
+});
+
+app.get('/auth/discord/callback', async (req, res) => {
+  if (!DISCORD_ENABLED) return res.status(404).send('Discord login is not configured');
+  const { code, state } = req.query;
+  const cookies = parseCookies(req);
+  if (!code || !state || state !== cookies.oauth_state) return res.status(400).send('OAuth state ไม่ถูกต้อง ลองใหม่');
+  try {
+    const tokRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code: String(code),
+        redirect_uri: redirectUri(req),
+      }).toString(),
+    });
+    const tok = await tokRes.json();
+    if (!tok.access_token) throw new Error('token exchange failed');
+    const meRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: 'Bearer ' + tok.access_token },
+    });
+    const u = await meRes.json();
+    if (!u || !u.id) throw new Error('fetch user failed');
+    const name = (u.global_name || u.username || ('user' + u.id)).slice(0, 40);
+    const sid = rid() + rid();
+    store.sessions[sid] = { discordId: u.id, name, avatar: u.avatar || '', createdAt: now() };
+    // prune very old sessions (>60 days)
+    const cutoff = now() - 60 * 864e5;
+    for (const k of Object.keys(store.sessions)) if ((store.sessions[k].createdAt || 0) < cutoff) delete store.sessions[k];
+    save();
+    const https = (req.headers['x-forwarded-proto'] || req.protocol) === 'https';
+    res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax', maxAge: 30 * 864e5, secure: https });
+    res.clearCookie('oauth_state');
+    res.redirect('/');
+  } catch (e) {
+    console.error('[discord] oauth error:', e.message);
+    res.status(500).send('เข้าสู่ระบบ Discord ไม่สำเร็จ');
+  }
+});
+
+app.post('/auth/logout', (req, res) => {
+  const sid = parseCookies(req).sid;
+  if (sid) delete store.sessions[sid];
+  save();
+  res.clearCookie('sid');
+  res.json({ ok: true });
+});
+
+// which character ids belong to the logged-in user (for cross-device editing)
+app.get('/api/mine', (req, res) => {
+  const u = currentUser(req);
+  if (!u) return res.json({ ids: [] });
+  res.json({ ids: store.characters.filter((c) => c.ownerId === u.discordId).map((c) => c.id) });
+});
 app.get('/api/admin/state', requireAdmin, (_req, res) => res.json(buildState(true)));
 app.get('/api/admin/history', requireAdmin, (_req, res) => res.json([...store.history].reverse().slice(0, 200)));
 
@@ -179,6 +284,8 @@ app.post('/api/characters', (req, res) => {
   cls = String(cls || '').trim().slice(0, 40);
   cp = Math.max(0, parseInt(cp, 10) || 0);
   dungeonIds = cleanDungeonIds(dungeonIds);
+  const _user = currentUser(req);
+  if (_user && !playerName) playerName = String(_user.name || '').trim().slice(0, 40);
   if (!playerName || !charName) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อคนเล่นและชื่อตัวละคร' });
   }
@@ -190,6 +297,7 @@ app.post('/api/characters', (req, res) => {
   const ch = {
     id: rid(), playerName, charName, cp, className: cls, dungeonIds,
     partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(), ip,
+    ownerId: _user ? _user.discordId : null,
   };
   store.characters.push(ch);
   logEvent(`เพิ่มตัวละคร "${charName}" — คนเล่น ${playerName}`, ip);
@@ -201,7 +309,9 @@ app.put('/api/characters/:id', (req, res) => {
   const c = findChar(req.params.id);
   if (!c) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
   const token = req.headers['x-edit-token'] || '';
-  if (token !== c.editToken && !isAdmin(req)) {
+  const _u = currentUser(req);
+  const _owns = _u && c.ownerId && c.ownerId === _u.discordId;
+  if (token !== c.editToken && !_owns && !isAdmin(req)) {
     return res.status(403).json({ error: 'แก้ไขได้เฉพาะตัวละครของคุณ' });
   }
   let { playerName, charName, cp, class: cls, dungeonIds } = req.body || {};
@@ -219,7 +329,9 @@ app.delete('/api/characters/:id', (req, res) => {
   const c = findChar(req.params.id);
   if (!c) return res.json({ ok: true });
   const token = req.headers['x-edit-token'] || '';
-  if (token !== c.editToken && !isAdmin(req)) {
+  const _u = currentUser(req);
+  const _owns = _u && c.ownerId && c.ownerId === _u.discordId;
+  if (token !== c.editToken && !_owns && !isAdmin(req)) {
     return res.status(403).json({ error: 'ลบได้เฉพาะตัวละครของคุณ' });
   }
   store.characters = store.characters.filter((x) => x.id !== c.id);

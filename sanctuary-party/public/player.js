@@ -12,6 +12,11 @@
   const saveNames = () => localStorage.setItem(NAME_KEY, JSON.stringify(myNames));
   const nameOf = (c) => c.playerName || myNames[c.id] || '';
 
+  let me = { enabled: false, user: null };
+  let mineIds = [];
+  const canEdit = (cid) => !!owned[cid] || mineIds.includes(cid);
+  const editHeaders = (cid) => (owned[cid] ? { 'X-Edit-Token': owned[cid] } : {});
+
   const $ = (id) => document.getElementById(id);
   const allChars = () => state.characters || [];
   const partiesOf = (cid) => state.parties.filter((p) => p.members.some((m) => m.id === cid));
@@ -94,7 +99,7 @@
 
   // ---- my characters ----
   function renderMine() {
-    const mine = allChars().filter((c) => owned[c.id]);
+    const mine = allChars().filter((c) => canEdit(c.id));
     const box = $('mine');
     if (!mine.length) { box.innerHTML = '<p class="empty">ยังไม่ได้ลงชื่อตัวละคร</p>'; return; }
     box.innerHTML = '';
@@ -105,7 +110,7 @@
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
           <div class="cn">${esc(c.charName)} ${assignedTags(c.id)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
-          <div class="pn">${nameOf(c) ? esc(nameOf(c)) + ' · ' : ''}${clsHtml(c.class)}</div>
+          <div class="pn">${(me.user ? me.user.name : nameOf(c)) ? esc(me.user ? me.user.name : nameOf(c)) + ' · ' : ''}${clsHtml(c.class)}</div>
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
         <div class="acts">
@@ -129,7 +134,7 @@
     if (!vals) return;
     try {
       await api('PUT', '/api/characters/' + c.id,
-        { charName: vals.charName, cp: vals.cp, class: vals.cls, dungeonIds: vals.dungeonIds }, { 'X-Edit-Token': owned[c.id] });
+        { charName: vals.charName, cp: vals.cp, class: vals.cls, dungeonIds: vals.dungeonIds }, editHeaders(c.id));
       toast('แก้ไขแล้ว');
     } catch (e) { toast(e.message, true); }
   }
@@ -138,8 +143,8 @@
     const ok = await SP.confirmModal(`ลบ "${c.charName}" ออกจากรายชื่อ?`, 'ลบ');
     if (!ok) return;
     try {
-      await api('DELETE', '/api/characters/' + c.id, null, { 'X-Edit-Token': owned[c.id] });
-      delete owned[c.id]; saveOwned();
+      await api('DELETE', '/api/characters/' + c.id, null, editHeaders(c.id));
+      if (owned[c.id]) { delete owned[c.id]; saveOwned(); }
       toast('ลบแล้ว');
     } catch (e) { toast(e.message, true); }
   }
@@ -272,7 +277,34 @@
   setInterval(tickCountdowns, 1000);
 
   // ---- live wiring ----
+  async function initAuth() {
+    try { me = await api('GET', '/auth/me'); } catch { me = { enabled: false, user: null }; }
+    renderAuthBar();
+    if (me.user) {
+      try { const r = await api('GET', '/api/mine'); mineIds = r.ids || []; } catch { mineIds = []; }
+      const pn = $('playerName');
+      if (pn) { pn.value = me.user.name; pn.readOnly = true; pn.title = 'ชื่อจาก Discord'; }
+      render();
+    }
+  }
+  function renderAuthBar() {
+    const nav = document.querySelector('.masthead nav');
+    if (!nav || !me.enabled) return;
+    let bar = document.getElementById('authBar');
+    if (!bar) { bar = document.createElement('span'); bar.id = 'authBar'; nav.insertBefore(bar, nav.firstChild); }
+    if (me.user) {
+      bar.innerHTML = `<span class="auth-user">🎮 ${esc(me.user.name)}</span> <button class="btn ghost small" id="logoutBtn">ออกจากระบบ</button>`;
+      document.getElementById('logoutBtn').onclick = async () => {
+        try { await api('POST', '/auth/logout'); } catch {}
+        location.reload();
+      };
+    } else {
+      bar.innerHTML = `<a class="btn small discord-btn" href="/auth/discord">เข้าสู่ระบบด้วย Discord</a>`;
+    }
+  }
+
   function render() { populateDungeons(); renderMine(); renderRoster(); renderBoard(); }
+  initAuth();
   connect((s) => { state = s; render(); }, (up) => {
     const dot = $('live');
     dot.classList.toggle('off', !up);

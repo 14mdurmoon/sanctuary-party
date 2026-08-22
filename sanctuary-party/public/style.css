@@ -65,7 +65,11 @@ a:hover { text-decoration: underline; }
   font-size: 1.15rem; margin: 0; color: #f2f5ff;
 }
 .brand .sub { margin: 2px 0 0; font-size: .82rem; color: var(--muted); letter-spacing: .02em; }
-.masthead nav { display: flex; gap: 10px; }
+.masthead nav { display: flex; gap: 10px; align-items: center; }
+#authBar { display: inline-flex; align-items: center; gap: 8px; }
+.auth-user { font-size: .82rem; color: var(--ether); font-weight: 600; }
+.discord-btn { background: #5865F2; border: 1px solid #5865F2; color: #fff; }
+.discord-btn:hover { background: #4752c4; border-color: #4752c4; text-decoration: none; }
 
 /* ---- buttons ---- */
 .btn {
