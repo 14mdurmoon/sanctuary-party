@@ -116,7 +116,7 @@
       (idx != null ? `<span class="slot-idx">${idx + 1}</span>` : '') +
       `<span class="cls-dot" style="color:${classColor(pl.class)}"></span>
        <div class="idn">
-         <div class="cn">${esc(pl.charName)} <span class="cls-chip" style="color:${classColor(pl.class)}">${esc(pl.class || '—')}</span></div>
+         <div class="cn"><span class="cn-name">${esc(pl.charName)}</span><span class="cls-chip" style="color:${classColor(pl.class)}">${esc(pl.class || '—')}</span></div>
          <div class="pn">${esc(pl.playerName)}</div>
          <div class="dg-line">${dgTag}</div>
        </div>
