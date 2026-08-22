@@ -195,10 +195,12 @@
           <div class="cd-when"></div>
         </div>
       </div>
-      <div class="slots"></div>`;
-    const slots = card.querySelector('.slots');
-    if (!n) slots.innerHTML = '<div class="empty-hint">ยังไม่มีสมาชิก</div>';
-    else p.members.forEach((m, i) => {
+      <div class="teams">
+        <div class="slots team-col"></div>
+        <div class="slots team-col"></div>
+      </div>`;
+    const zones = card.querySelectorAll('.team-col');
+    const memberRow = (m, i) => {
       const row = document.createElement('div');
       row.className = 'card' + (m.carry ? ' carry' : '');
       row.innerHTML = `
@@ -209,8 +211,16 @@
           <div class="pn">${m.playerName ? esc(m.playerName) + ' · ' : ''}${clsHtml(m.class)}</div>
         </div>
         <span class="cp">${nfmt(m.cp)}</span>`;
-      slots.appendChild(row);
-    });
+      return row;
+    };
+    const teamA = p.teamA || [];
+    const teamB = p.teamB || [];
+    if (!teamA.length && !teamB.length) {
+      zones[0].innerHTML = '<div class="empty-hint">ยังไม่มีสมาชิก</div>';
+    } else {
+      teamA.forEach((m, i) => zones[0].appendChild(memberRow(m, i)));
+      teamB.forEach((m, i) => zones[1].appendChild(memberRow(m, i + 5)));
+    }
     return card;
   }
 

@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 const PARTY_SIZE = 10;
+const TEAM_SIZE = 5;
 
 // ---------- storage (JSON file, no native deps) ----------
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -115,14 +116,16 @@ function placementsOf(c) {
 }
 
 function buildState(full) {
-  const byParty = {};
+  const byPartyTeam = {};
   const pool = [];
   for (const c of store.characters) {
     for (const pl of placementsOf(c)) {
       const a = store.assignments[pl.placementId];
       const order = a && typeof a.slotOrder === 'number' ? a.slotOrder : 0;
       if (a && a.partyId && findParty(a.partyId)) {
-        (byParty[a.partyId] || (byParty[a.partyId] = [])).push({ pl, order });
+        const t = a.subteam === 1 ? 1 : 0;
+        const slot = byPartyTeam[a.partyId] || (byPartyTeam[a.partyId] = [[], []]);
+        slot[t].push({ pl, order });
       } else {
         pool.push({ pl, order });
       }
@@ -131,7 +134,12 @@ function buildState(full) {
   const strip = (arr) => arr.sort((x, y) => x.order - y.order).map((o) => o.pl);
   const parties = [...store.parties]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
-    .map((p) => ({ id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, members: strip(byParty[p.id] || []) }));
+    .map((p) => {
+      const t = byPartyTeam[p.id] || [[], []];
+      const teamA = strip(t[0]);
+      const teamB = strip(t[1]);
+      return { id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, teamA, teamB, members: [...teamA, ...teamB] };
+    });
   const groups = [...store.groups]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
     .map((g) => ({ id: g.id, name: g.name }));
@@ -148,7 +156,7 @@ function buildState(full) {
     ...state,
     characters: state.characters.map(scrub),
     pool: state.pool.map(scrub),
-    parties: state.parties.map((p) => ({ ...p, members: p.members.map(scrub) })),
+    parties: state.parties.map((p) => ({ ...p, teamA: p.teamA.map(scrub), teamB: p.teamB.map(scrub), members: p.members.map(scrub) })),
   };
 }
 function getState() { return buildState(false); }
@@ -520,12 +528,13 @@ app.post('/api/layout', requireAdmin, (req, res) => {
   const { pool = [], parties = [] } = req.body || {};
   const charOf = (placementId) => findChar(String(placementId).split('|')[0]);
   for (const p of parties) {
-    const ids = p.memberIds || [];
-    if (ids.length > PARTY_SIZE) {
-      return res.status(400).json({ error: `ตี้ลงได้สูงสุด ${PARTY_SIZE} คน` });
+    const teamA = p.teamA || [];
+    const teamB = p.teamB || [];
+    if (teamA.length > TEAM_SIZE || teamB.length > TEAM_SIZE) {
+      return res.status(400).json({ error: `แต่ละทีมลงได้สูงสุด ${TEAM_SIZE} คน` });
     }
     const seen = new Set();
-    for (const plid of ids) {
+    for (const plid of [...teamA, ...teamB]) {
       const c = charOf(plid);
       if (!c) continue;
       const key = String(c.playerName || '').trim().toLowerCase();
@@ -537,7 +546,10 @@ app.post('/api/layout', requireAdmin, (req, res) => {
   }
   let order = 0;
   pool.forEach((plid) => { store.assignments[plid] = { partyId: null, slotOrder: order++ }; });
-  for (const p of parties) (p.memberIds || []).forEach((plid) => { store.assignments[plid] = { partyId: p.id, slotOrder: order++ }; });
+  for (const p of parties) {
+    (p.teamA || []).forEach((plid) => { store.assignments[plid] = { partyId: p.id, subteam: 0, slotOrder: order++ }; });
+    (p.teamB || []).forEach((plid) => { store.assignments[plid] = { partyId: p.id, subteam: 1, slotOrder: order++ }; });
+  }
   save(); broadcast();
   res.json({ ok: true });
 });

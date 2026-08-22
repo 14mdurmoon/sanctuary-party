@@ -207,9 +207,13 @@
           <div class="cd-when"></div>
         </div>
       </div>
-      <div class="slots dropzone" data-party="${p.id}"></div>`;
-    const slots = card.querySelector('.slots');
-    p.members.forEach((m, i) => slots.appendChild(charCard(m, i)));
+      <div class="teams">
+        <div class="slots dropzone team-col" data-party="${p.id}" data-team="0"></div>
+        <div class="slots dropzone team-col" data-party="${p.id}" data-team="1"></div>
+      </div>`;
+    const zones = card.querySelectorAll('.team-col');
+    (p.teamA || []).forEach((m, i) => zones[0].appendChild(charCard(m, i)));
+    (p.teamB || []).forEach((m, i) => zones[1].appendChild(charCard(m, i + 5)));
     return card;
   }
 
@@ -229,14 +233,20 @@
         onStart: () => { dragging = true; dupWarned = false; },
         onMove: (evt) => {
           const to = evt.to;
-          if (to.dataset.party && to.dataset.party !== 'pool' && to !== evt.from) {
-            if (to.querySelectorAll('[data-id]').length >= state.partySize) return false;
+          if (to.dataset.party && to.dataset.party !== 'pool') {
+            // per-team cap (5)
+            if (to !== evt.from && to.querySelectorAll('[data-id]').length >= 5) return false;
             const dragged = placementById(evt.dragged && evt.dragged.dataset.id);
             if (dragged) {
-              const dup = [...to.querySelectorAll('[data-id]')].some((el) => {
-                if (el === evt.dragged) return false;
-                const m = placementById(el.dataset.id);
-                return m && norm(m.playerName) === norm(dragged.playerName);
+              // duplicate player across BOTH team columns of this party
+              const zones = document.querySelectorAll(`.team-col[data-party="${to.dataset.party}"]`);
+              let dup = false;
+              zones.forEach((z) => {
+                [...z.querySelectorAll('[data-id]')].forEach((el) => {
+                  if (el === evt.dragged) return;
+                  const m = placementById(el.dataset.id);
+                  if (m && norm(m.playerName) === norm(dragged.playerName)) dup = true;
+                });
               });
               if (dup) {
                 if (!dupWarned) { toast(`${dragged.playerName} อยู่ในตี้นี้แล้ว`, true); dupWarned = true; }
@@ -288,10 +298,12 @@
 
   function collectLayout() {
     const pool = [...$('pool').querySelectorAll('[data-id]')].map((e) => e.dataset.id);
-    const parties = state.parties.map((p) => {
-      const cont = document.querySelector(`.slots[data-party="${p.id}"]`);
-      return { id: p.id, memberIds: cont ? [...cont.querySelectorAll('[data-id]')].map((e) => e.dataset.id) : [] };
-    });
+    const ids = (sel) => { const el = document.querySelector(sel); return el ? [...el.querySelectorAll('[data-id]')].map((e) => e.dataset.id) : []; };
+    const parties = state.parties.map((p) => ({
+      id: p.id,
+      teamA: ids(`.team-col[data-party="${p.id}"][data-team="0"]`),
+      teamB: ids(`.team-col[data-party="${p.id}"][data-team="1"]`),
+    }));
     return { pool, parties };
   }
 
@@ -300,13 +312,13 @@
     // duplicate-player guard (reliable on touch where onMove may not cancel the drop)
     for (const p of layout.parties) {
       const seen = new Set();
-      for (const id of p.memberIds) {
+      for (const id of [...p.teamA, ...p.teamB]) {
         const c = placementById(id);
         if (!c) continue;
         const k = norm(c.playerName);
         if (seen.has(k)) {
           toast(`${c.playerName} อยู่ในตี้เดียวกันซ้ำไม่ได้`, true);
-          render(); // revert illegal drop to last server state
+          render();
           return;
         }
         seen.add(k);
