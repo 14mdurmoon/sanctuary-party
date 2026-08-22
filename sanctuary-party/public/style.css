@@ -154,6 +154,31 @@ input::placeholder { color: var(--faint); }
 .icon-btn.del:hover { color: var(--danger); border-color: var(--danger); }
 .icon-btn.ban:hover { color: var(--danger); border-color: var(--danger); }
 .bans-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: rgba(255,107,125,.06); border: 1px solid #52304a; border-radius: 12px; }
+.tools-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.stat-chip { font-size: .82rem; color: var(--muted); background: var(--void-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+.stat-chip b { color: var(--gold); font-family: ui-monospace, monospace; }
+.stat-sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.tools-tabs { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.tab-btn { background: transparent; }
+.tab-btn.active { background: var(--panel-2); border-color: var(--ether-dim); color: var(--ether); }
+.tools-pane { max-height: 360px; overflow: auto; }
+.tools-table td.mono, .mono { font-family: ui-monospace, monospace; font-size: .82rem; }
+.log-list { list-style: none; margin: 0; padding: 0; }
+.log-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px solid var(--line-soft); font-size: .86rem; }
+.log-list li:last-child { border-bottom: none; }
+.log-time { font-family: ui-monospace, monospace; font-size: .76rem; color: var(--faint); white-space: nowrap; }
+.log-type { color: var(--ether); font-weight: 600; }
+.log-who { color: var(--text); }
+.log-detail { color: var(--muted); }
+.log-ip { color: var(--faint); margin-left: auto; }
+.admin-tools { display: flex; gap: 8px; margin-bottom: 14px; }
+.history-panel { margin-bottom: 16px; background: rgba(20,26,46,.6); border: 1px solid var(--line); border-radius: 12px; max-height: 320px; overflow-y: auto; }
+.history-head { padding: 10px 14px; font-family: "Cinzel","Sarabun",serif; font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; color: #eef1ff; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--panel); }
+.history-row { display: flex; gap: 12px; align-items: baseline; padding: 8px 14px; border-bottom: 1px solid var(--line-soft); font-size: .85rem; }
+.history-row:last-child { border-bottom: none; }
+.h-time { color: var(--faint); font-family: ui-monospace, monospace; font-size: .74rem; white-space: nowrap; flex: none; width: 108px; }
+.h-text { color: var(--text); flex: 1; }
+.h-ip { color: var(--muted); font-family: ui-monospace, monospace; font-size: .72rem; white-space: nowrap; }
 .bans-title { font-size: .82rem; color: var(--danger); font-weight: 600; }
 .ban-chip { display: inline-flex; align-items: center; gap: 7px; font-family: ui-monospace, monospace; font-size: .76rem; color: var(--muted); background: var(--void-2); border: 1px solid var(--line); padding: 3px 6px 3px 10px; border-radius: 8px; }
 .ban-chip .unban { font-family: "Sarabun", sans-serif; font-size: .72rem; color: var(--ether); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; }

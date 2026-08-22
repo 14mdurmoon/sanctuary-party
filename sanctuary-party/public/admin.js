@@ -53,6 +53,7 @@
     $('loginPanel').style.display = 'none';
     $('console').style.display = '';
     $('logout').style.display = '';
+    initTools();
     if (!document.getElementById('bansBar')) {
       const bar = document.createElement('div');
       bar.className = 'bans-bar'; bar.id = 'bansBar'; bar.style.display = 'none';
@@ -61,6 +62,7 @@
     loadBans();
     startLive();
   }
+
 
   async function loadBans() {
     try { adminBans = await api('GET', '/api/admin/bans', null, authHeaders()); }
@@ -245,7 +247,7 @@
         },
         onEnd: async () => {
           try { await syncLayout(); }
-          finally { dragging = false; if (pending) { state = pending; pending = null; render(); } }
+          finally { dragging = false; pending = false; refreshAdmin(); }
         },
       }));
     });
@@ -263,7 +265,7 @@
         onStart: () => { dragging = true; },
         onEnd: async () => {
           try { await syncPartyLayout(); }
-          finally { dragging = false; if (pending) { state = pending; pending = null; render(); } }
+          finally { dragging = false; pending = false; refreshAdmin(); }
         },
       }));
     });
@@ -426,17 +428,120 @@
 
   // ---------- live ----------
   let liveStarted = false;
+  let fetching = false, refetch = false;
+  async function refreshAdmin() {
+    if (dragging) { pending = true; return; }
+    if (fetching) { refetch = true; return; }
+    fetching = true;
+    try { state = await api('GET', '/api/admin/state', null, authHeaders()); render(); }
+    catch (e) { /* token may be stale */ }
+    finally { fetching = false; if (refetch) { refetch = false; refreshAdmin(); } }
+  }
   function startLive() {
-    if (liveStarted) { render(); return; }
+    if (liveStarted) { refreshAdmin(); return; }
     liveStarted = true;
-    connect((s) => {
-      if (dragging) { pending = s; return; }   // don't clobber an in-progress drag
-      state = s; render();
-    }, (up) => {
+    refreshAdmin();
+    connect(() => { refreshAdmin(); }, (up) => {
       const dot = $('live');
       dot.classList.toggle('off', !up);
       dot.querySelector('i').nextSibling.textContent = up ? ' live' : ' offline';
     });
+  }
+
+  // ---------- admin tools (players, activity log, stats, CSV) ----------
+  let toolsOpen = false;
+  function initTools() {
+    const toggle = $('toolsToggle');
+    if (!toggle || toggle._wired) return;
+    toggle._wired = true;
+    toggle.addEventListener('click', () => {
+      toolsOpen = !toolsOpen;
+      $('toolsBody').style.display = toolsOpen ? '' : 'none';
+      toggle.textContent = toolsOpen ? 'ซ่อน' : 'แสดง';
+      if (toolsOpen) loadTools();
+    });
+    $('toolsRefresh').addEventListener('click', loadTools);
+    document.querySelectorAll('#adminTools .tab-btn').forEach((b) => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('#adminTools .tab-btn').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        const tab = b.dataset.tab;
+        $('toolsPlayers').style.display = tab === 'players' ? '' : 'none';
+        $('toolsLog').style.display = tab === 'log' ? '' : 'none';
+      });
+    });
+    $('exportCsv').addEventListener('click', exportCsv);
+  }
+
+  async function loadTools() {
+    try {
+      const [ins, log] = await Promise.all([
+        api('GET', '/api/admin/insights', null, authHeaders()),
+        api('GET', '/api/admin/history', null, authHeaders()),
+      ]);
+      renderStats(ins.stats);
+      renderPlayers(ins.players);
+      renderLog(log);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  function renderStats(st) {
+    const perDg = Object.entries(st.perDungeon || {})
+      .map(([k, v]) => `<span class="stat-chip">${esc(k)} <b>${v}</b></span>`).join('');
+    $('toolsStats').innerHTML =
+      `<span class="stat-chip">ผู้เล่น <b>${st.players}</b></span>` +
+      `<span class="stat-chip">ตัวละคร <b>${st.characters}</b></span>` +
+      `<span class="stat-chip">จัดลงตี้แล้ว <b>${st.assigned}</b></span>` +
+      `<span class="stat-chip">ตี้ <b>${st.parties}</b></span>` +
+      `<span class="stat-chip">ตี้เต็ม <b>${st.partiesFull}</b></span>` +
+      (perDg ? `<span class="stat-sep"></span>${perDg}` : '');
+  }
+
+  function renderPlayers(players) {
+    if (!players.length) { $('toolsPlayers').innerHTML = '<p class="empty">ยังไม่มีผู้ใช้งาน</p>'; return; }
+    const rows = players.map((p) => `
+      <tr>
+        <td><b>${esc(p.playerName)}</b></td>
+        <td class="num">${p.count}</td>
+        <td class="muted">${p.chars.map((c) => esc(c.charName)).join(', ')}</td>
+        <td class="mono">${p.ips.length ? p.ips.map(esc).join('<br>') : '<span class="muted">—</span>'}</td>
+      </tr>`).join('');
+    $('toolsPlayers').innerHTML = `<table class="roster tools-table">
+      <thead><tr><th>คนเล่น</th><th>ตัว</th><th>ตัวละคร</th><th>IP</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+
+  function fmtTime(t) {
+    return new Date(t).toLocaleString('th-TH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  function renderLog(log) {
+    if (!log.length) { $('toolsLog').innerHTML = '<p class="empty">ยังไม่มีประวัติ</p>'; return; }
+    $('toolsLog').innerHTML = `<ul class="log-list">` + log.map((e) => `
+      <li>
+        <span class="log-time">${fmtTime(e.t)}</span>
+        <span class="log-detail">${esc(e.text || '')}</span>
+        ${e.ip ? `<span class="log-ip mono">${esc(e.ip)}</span>` : ''}
+      </li>`).join('') + `</ul>`;
+  }
+
+  function exportCsv() {
+    const gname = {}; (state.groups || []).forEach((g) => { gname[g.id] = g.name; });
+    const partiesOf = (cid) => state.parties.filter((p) => p.members.some((m) => m.id === cid)).map((p) => p.name);
+    const rows = [['ตัวละคร', 'คนเล่น', 'คลาส', 'CP', 'ดัน', 'ตี้ที่ลง']];
+    (state.characters || []).forEach((c) => {
+      rows.push([
+        c.charName, c.playerName, c.class, c.cp,
+        (c.dungeonIds || []).map((id) => gname[id]).filter(Boolean).join(' / '),
+        partiesOf(c.id).join(' / '),
+      ]);
+    });
+    const csv = rows.map((r) => r.map((v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sanctuary-roster.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
   }
 
   // ---------- boot ----------

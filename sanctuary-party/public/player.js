@@ -1,11 +1,16 @@
 (function () {
   const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonName, dungeonTagsHtml, toast, api, connect, esc, nfmt } = SP;
   const OWN_KEY = 'sanctuary_owned_v1';
+  const NAME_KEY = 'sanctuary_mynames_v1';
   let owned = {};      // { charId: editToken }
   let state = { pool: [], parties: [], partySize: 10 };
 
   try { owned = JSON.parse(localStorage.getItem(OWN_KEY) || '{}'); } catch { owned = {}; }
   const saveOwned = () => localStorage.setItem(OWN_KEY, JSON.stringify(owned));
+  let myNames = {};
+  try { myNames = JSON.parse(localStorage.getItem(NAME_KEY) || '{}'); } catch { myNames = {}; }
+  const saveNames = () => localStorage.setItem(NAME_KEY, JSON.stringify(myNames));
+  const nameOf = (c) => c.playerName || myNames[c.id] || '';
 
   const $ = (id) => document.getElementById(id);
   const allChars = () => state.characters || [];
@@ -76,6 +81,7 @@
     try {
       const r = await api('POST', '/api/characters', { playerName, charName, cp, class: cls, dungeonIds });
       owned[r.id] = r.editToken; saveOwned();
+      myNames[r.id] = playerName; saveNames();
       $('charName').value = ''; $('cp').value = ''; // keep playerName + class for fast multi-add
       $('charName').focus();
       toast('เพิ่มตัวละครแล้ว');
@@ -99,7 +105,7 @@
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
           <div class="cn">${esc(c.charName)} ${assignedTags(c.id)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
-          <div class="pn">${esc(c.playerName)} · ${clsHtml(c.class)}</div>
+          <div class="pn">${nameOf(c) ? esc(nameOf(c)) + ' · ' : ''}${clsHtml(c.class)}</div>
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
         <div class="acts">
@@ -149,7 +155,7 @@
       const tags = assignedTags(c.id);
       return `<tr>
         <td><span class="cls-dot" style="color:${classColor(c.class)};display:inline-block;margin-right:7px"></span><b>${esc(c.charName)}</b></td>
-        <td class="muted">${esc(c.playerName)}</td>
+        <td class="muted">${nameOf(c) ? esc(nameOf(c)) : '<span class="muted">ซ่อน</span>'}</td>
         <td>${clsHtml(c.class)}</td>
         <td>${dungeonTagsHtml(state.groups, c.dungeonIds) || '<span class="muted">—</span>'}</td>
         <td class="num">${nfmt(c.cp)}</td>
@@ -195,7 +201,7 @@
         <span class="cls-dot" style="color:${classColor(m.class)}"></span>
         <div class="idn">
           <div class="cn">${esc(m.charName)}${m.dungeonId ? dungeonTagsHtml(state.groups, [m.dungeonId]) : ''}</div>
-          <div class="pn">${esc(m.playerName)} · ${clsHtml(m.class)}</div>
+          <div class="pn">${m.playerName ? esc(m.playerName) + ' · ' : ''}${clsHtml(m.class)}</div>
         </div>
         <span class="cp">${nfmt(m.cp)}</span>`;
       slots.appendChild(row);

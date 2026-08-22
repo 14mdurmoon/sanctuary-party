@@ -12,7 +12,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [], assignments: {} };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -23,6 +23,8 @@ try {
     if (!Array.isArray(c.dungeonIds)) c.dungeonIds = c.dungeonId ? [c.dungeonId] : [];
   }
   if (typeof store.assignments !== 'object' || store.assignments === null) store.assignments = {};
+  if (!Array.isArray(store.log)) store.log = [];
+  if (!Array.isArray(store.history)) store.history = [];
   if (!store._assignMigrated) {
     for (const c of store.characters) {
       if (c.partyId) {
@@ -49,6 +51,10 @@ function save() {
 // ---------- helpers ----------
 const rid = () => crypto.randomBytes(9).toString('hex');
 const now = () => Date.now();
+function logEvent(text, ip) {
+  store.history.push({ t: now(), text: String(text || '').slice(0, 160), ip: ip || '' });
+  if (store.history.length > 300) store.history = store.history.slice(-300);
+}
 const findChar = (id) => store.characters.find((c) => c.id === id);
 const findParty = (id) => store.parties.find((p) => p.id === id);
 const findGroup = (id) => store.groups.find((g) => g.id === id);
@@ -83,7 +89,7 @@ function placementsOf(c) {
   }));
 }
 
-function getState() {
+function buildState(full) {
   const byParty = {};
   const pool = [];
   for (const c of store.characters) {
@@ -104,12 +110,23 @@ function getState() {
   const groups = [...store.groups]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
     .map((g) => ({ id: g.id, name: g.name }));
-  const characters = store.characters.map((c) => ({
-    id: c.id, playerName: c.playerName, charName: c.charName, cp: c.cp,
-    class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry,
-  }));
-  return { partySize: PARTY_SIZE, characters, pool: strip(pool), parties, groups };
+  const characters = store.characters.map((c) => {
+    const base = { id: c.id, charName: c.charName, cp: c.cp, class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry };
+    if (full) { base.playerName = c.playerName; base.ip = c.ip || ''; base.createdAt = c.createdAt || 0; }
+    return base;
+  });
+  const state = { partySize: PARTY_SIZE, characters, pool: strip(pool), parties, groups };
+  if (full) return state;
+  // public: scrub player identity (playerName) from everything
+  const scrub = (x) => { const { playerName, ...rest } = x; return rest; };
+  return {
+    ...state,
+    characters: state.characters.map(scrub),
+    pool: state.pool.map(scrub),
+    parties: state.parties.map((p) => ({ ...p, members: p.members.map(scrub) })),
+  };
 }
+function getState() { return buildState(false); }
 
 // ---------- app ----------
 const app = express();
@@ -151,6 +168,8 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
 });
 app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }));
+app.get('/api/admin/state', requireAdmin, (_req, res) => res.json(buildState(true)));
+app.get('/api/admin/history', requireAdmin, (_req, res) => res.json([...store.history].reverse().slice(0, 200)));
 
 // ---------- characters ----------
 app.post('/api/characters', (req, res) => {
@@ -173,6 +192,7 @@ app.post('/api/characters', (req, res) => {
     partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(), ip,
   };
   store.characters.push(ch);
+  logEvent(`เพิ่มตัวละคร "${charName}" — คนเล่น ${playerName}`, ip);
   save(); broadcast();
   res.json({ id: ch.id, editToken: ch.editToken });
 });
@@ -190,6 +210,7 @@ app.put('/api/characters/:id', (req, res) => {
   if (cls !== undefined) c.className = String(cls).trim().slice(0, 40);
   if (cp !== undefined) c.cp = Math.max(0, parseInt(cp, 10) || 0);
   if (dungeonIds !== undefined) c.dungeonIds = cleanDungeonIds(dungeonIds);
+  logEvent(`แก้ไขตัวละคร "${c.charName}" — คนเล่น ${c.playerName}`, c.ip);
   save(); broadcast();
   res.json({ ok: true });
 });
@@ -203,6 +224,7 @@ app.delete('/api/characters/:id', (req, res) => {
   }
   store.characters = store.characters.filter((x) => x.id !== c.id);
   for (const k of Object.keys(store.assignments)) if (k.split('|')[0] === c.id) delete store.assignments[k];
+  logEvent(`ลบตัวละคร "${c.charName}" — คนเล่น ${c.playerName}`, c.ip);
   save(); broadcast();
   res.json({ ok: true });
 });
@@ -234,6 +256,7 @@ app.post('/api/admin/ban', requireAdmin, (req, res) => {
   store.characters = store.characters.filter((x) => x.ip !== ip);
   for (const k of Object.keys(store.assignments)) if (removedIds.includes(k.split('|')[0])) delete store.assignments[k];
   const removed = removedIds.length;
+  logEvent(`แบน IP ${ip} (ลบ ${removed} ตัวละคร)`, ip);
   save(); broadcast();
   res.json({ ip, removed });
 });
@@ -241,8 +264,54 @@ app.post('/api/admin/ban', requireAdmin, (req, res) => {
 app.post('/api/admin/unban', requireAdmin, (req, res) => {
   const { ip } = req.body || {};
   store.bans = store.bans.filter((x) => x !== ip);
+  logEvent('ปลดแบน IP', 'แอดมิน', ip, req.ip);
   save();
   res.json({ ok: true });
+});
+
+// ---------- admin insights & activity log ----------
+app.get('/api/admin/insights', requireAdmin, (_req, res) => {
+  const groupName = {};
+  store.groups.forEach((g) => { groupName[g.id] = g.name; });
+
+  const playersMap = {};
+  for (const c of store.characters) {
+    const key = (c.playerName || '').trim() || '(ไม่ระบุ)';
+    const pm = playersMap[key] || (playersMap[key] = { playerName: key, count: 0, ips: new Set(), chars: [] });
+    pm.count++;
+    if (c.ip) pm.ips.add(c.ip);
+    pm.chars.push({
+      charName: c.charName, cp: c.cp, class: c.className,
+      dungeons: (c.dungeonIds || []).map((id) => groupName[id]).filter(Boolean),
+    });
+  }
+  const players = Object.values(playersMap)
+    .map((p) => ({ playerName: p.playerName, count: p.count, ips: [...p.ips], chars: p.chars }))
+    .sort((a, b) => b.count - a.count);
+
+  const perDungeon = {};
+  for (const c of store.characters) {
+    for (const id of (c.dungeonIds || [])) if (groupName[id]) perDungeon[groupName[id]] = (perDungeon[groupName[id]] || 0) + 1;
+  }
+  let assigned = 0;
+  const partyCounts = {};
+  for (const k of Object.keys(store.assignments)) {
+    const a = store.assignments[k];
+    if (a && a.partyId) { assigned++; partyCounts[a.partyId] = (partyCounts[a.partyId] || 0) + 1; }
+  }
+  const partiesFull = store.parties.filter((p) => (partyCounts[p.id] || 0) >= PARTY_SIZE).length;
+
+  res.json({
+    players,
+    stats: {
+      players: players.length,
+      characters: store.characters.length,
+      parties: store.parties.length,
+      assigned,
+      partiesFull,
+      perDungeon,
+    },
+  });
 });
 
 // ---------- parties (admin only) ----------
@@ -257,6 +326,7 @@ app.post('/api/parties', requireAdmin, (req, res) => {
     sortOrder: maxOrder + 1, createdAt: now(),
   };
   store.parties.push(p);
+  logEvent(`สร้างตี้ "${p.name}"`);
   save(); broadcast();
   res.json({ id: p.id });
 });
@@ -276,7 +346,9 @@ app.delete('/api/parties/:id', requireAdmin, (req, res) => {
   for (const k of Object.keys(store.assignments)) {
     if (store.assignments[k] && store.assignments[k].partyId === req.params.id) delete store.assignments[k];
   }
+  const dp = findParty(req.params.id);
   store.parties = store.parties.filter((p) => p.id !== req.params.id);
+  logEvent(`ลบตี้ "${dp ? dp.name : ''}"`);
   save(); broadcast();
   res.json({ ok: true });
 });
@@ -287,6 +359,7 @@ app.post('/api/groups', requireAdmin, (req, res) => {
   const maxOrder = store.groups.reduce((m, g) => Math.max(m, g.sortOrder || 0), 0);
   const g = { id: rid(), name: String(name || 'หมวดใหม่').trim().slice(0, 40) || 'หมวดใหม่', sortOrder: maxOrder + 1, createdAt: now() };
   store.groups.push(g);
+  logEvent(`สร้างหมวด "${g.name}"`);
   save(); broadcast();
   res.json({ id: g.id });
 });
@@ -302,7 +375,9 @@ app.put('/api/groups/:id', requireAdmin, (req, res) => {
 
 app.delete('/api/groups/:id', requireAdmin, (req, res) => {
   for (const p of store.parties) if (p.groupId === req.params.id) p.groupId = null;
+  const gg = findGroup(req.params.id);
   store.groups = store.groups.filter((g) => g.id !== req.params.id);
+  logEvent(`ลบหมวด "${gg ? gg.name : ''}"`);
   save(); broadcast();
   res.json({ ok: true });
 });
