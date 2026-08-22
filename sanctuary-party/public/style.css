@@ -135,6 +135,7 @@ input::placeholder { color: var(--faint); }
 .card .dg-line { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; }
 .card .dg-line .tag { margin-left: 0; }
 .card .idn .cn { font-weight: 700; font-size: .95rem; color: #f1f4ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .idn .cls-chip { font-weight: 600; font-size: .78rem; }
 .card .idn .pn { font-size: .78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .cls { font-size: .78rem; color: var(--violet); }
 .card .cp {
