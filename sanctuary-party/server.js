@@ -40,6 +40,19 @@ try {
     }
     store._assignMigrated = true;
   }
+  if (!store._teamMigrated) {
+    // split each party's assigned members into two 5-man teams by slot order
+    const byParty = {};
+    for (const [k, a] of Object.entries(store.assignments)) {
+      if (a && a.partyId) (byParty[a.partyId] || (byParty[a.partyId] = [])).push([k, a]);
+    }
+    for (const pid of Object.keys(byParty)) {
+      byParty[pid]
+        .sort((x, y) => (x[1].slotOrder || 0) - (y[1].slotOrder || 0))
+        .forEach(([, a], i) => { a.subteam = i < 5 ? 0 : 1; });
+    }
+    store._teamMigrated = true;
+  }
 } catch { /* fresh store */ }
 
 function save() {
