@@ -13,7 +13,7 @@
   let sortables = [];
 
   const $ = (id) => document.getElementById(id);
-  const authHeaders = () => ({ Authorization: 'Bearer ' + token });
+  const authHeaders = () => (token ? { Authorization: 'Bearer ' + token } : {});
 
   // ---------- date helpers ----------
   function toLocalInput(ms) {
@@ -25,9 +25,9 @@
 
   // ---------- auth ----------
   async function tryAuth() {
-    if (!token) return false;
+    // works with a saved password token OR a Discord-admin session cookie
     try { await api('GET', '/api/admin/check', null, authHeaders()); return true; }
-    catch { token = ''; localStorage.removeItem(TOKEN_KEY); return false; }
+    catch { if (token) { token = ''; localStorage.removeItem(TOKEN_KEY); } return false; }
   }
   async function login() {
     const pw = $('pw').value;
@@ -481,9 +481,17 @@
         const tab = b.dataset.tab;
         $('toolsPlayers').style.display = tab === 'players' ? '' : 'none';
         $('toolsLog').style.display = tab === 'log' ? '' : 'none';
+        if ($('toolsRoles')) $('toolsRoles').style.display = tab === 'roles' ? '' : 'none';
       });
     });
     $('exportCsv').addEventListener('click', exportCsv);
+    const roles = $('toolsRoles');
+    if (roles) roles.addEventListener('click', (e) => {
+      const g = e.target.closest('.role-grant');
+      const r = e.target.closest('.role-revoke');
+      if (g) roleAction('/api/admin/grant', g.dataset.id);
+      else if (r) roleAction('/api/admin/revoke', r.dataset.id);
+    });
   }
 
   async function loadTools() {
@@ -496,6 +504,40 @@
       renderPlayers(ins.players);
       renderLog(log);
     } catch (e) { toast(e.message, true); }
+    try {
+      const cm = await api('GET', '/api/admin/can-manage', null, authHeaders());
+      const rolesTab = $('rolesTab');
+      if (cm.canManage) {
+        if (rolesTab) rolesTab.style.display = '';
+        const du = await api('GET', '/api/admin/discord-users', null, authHeaders());
+        renderRoles(du.users || [], du.enabled);
+      } else if (rolesTab) {
+        rolesTab.style.display = 'none';
+      }
+    } catch (e) { /* not allowed to manage */ }
+  }
+
+  function renderRoles(users, enabled) {
+    const box = $('toolsRoles');
+    if (!box) return;
+    if (!enabled) { box.innerHTML = '<p class="empty">ยังไม่ได้เปิดใช้ Discord login</p>'; return; }
+    if (!users.length) { box.innerHTML = '<p class="empty">ยังไม่มีใครเข้าสู่ระบบด้วย Discord</p>'; return; }
+    const rows = users.map((u) => `
+      <tr>
+        <td><b>${esc(u.name)}</b>${u.isSuper ? ' <span class="tag">super</span>' : ''}</td>
+        <td class="mono">${esc(u.discordId)}</td>
+        <td>${u.isAdmin ? '<span class="tag assigned">แอดมิน</span>' : '<span class="muted">—</span>'}</td>
+        <td style="text-align:right">${u.isSuper ? '' : (u.isAdmin
+          ? `<button class="btn ghost small role-revoke" data-id="${esc(u.discordId)}">ถอดสิทธิ์</button>`
+          : `<button class="btn small role-grant" data-id="${esc(u.discordId)}">ตั้งเป็นแอดมิน</button>`)}</td>
+      </tr>`).join('');
+    box.innerHTML = `<table class="roster tools-table"><thead><tr><th>Discord</th><th>ID</th><th>สถานะ</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="hint" style="margin-top:8px">ผู้ใช้จะปรากฏที่นี่หลังเข้าสู่ระบบด้วย Discord อย่างน้อย 1 ครั้ง · แอดมินที่ตั้งจะเข้าหน้านี้ได้ด้วยบัญชี Discord</p>`;
+  }
+
+  async function roleAction(path, discordId) {
+    try { await api('POST', path, { discordId }, authHeaders()); toast('อัปเดตสิทธิ์แล้ว'); loadTools(); }
+    catch (e) { toast(e.message, true); }
   }
 
   function renderStats(st) {

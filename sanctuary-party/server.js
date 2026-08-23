@@ -13,7 +13,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {} };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {}, adminDiscordIds: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -27,6 +27,7 @@ try {
   if (!Array.isArray(store.log)) store.log = [];
   if (!Array.isArray(store.history)) store.history = [];
   if (typeof store.sessions !== 'object' || store.sessions === null) store.sessions = {};
+  if (!Array.isArray(store.adminDiscordIds)) store.adminDiscordIds = [];
   if (!store._assignMigrated) {
     for (const c of store.characters) {
       if (c.partyId) {
@@ -111,10 +112,27 @@ function redirectUri(req) {
   return `${proto}://${req.headers.host}/auth/discord/callback`;
 }
 const bearer = (req) => (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-const isAdmin = (req) => adminTokens.has(bearer(req));
+function isDiscordAdmin(id) {
+  return ADMIN_DISCORD_IDS.includes(id) || (store.adminDiscordIds || []).includes(id);
+}
+function isAdmin(req) {
+  if (adminTokens.has(bearer(req))) return true;
+  const u = currentUser(req);
+  return !!(u && isDiscordAdmin(u.discordId));
+}
+// "manage admins" = password admin or env super-admin (not discord-granted admins)
+function canManage(req) {
+  if (adminTokens.has(bearer(req))) return true;
+  const u = currentUser(req);
+  return !!(u && ADMIN_DISCORD_IDS.includes(u.discordId));
+}
 function requireAdmin(req, res, next) {
   if (isAdmin(req)) return next();
   res.status(401).json({ error: 'unauthorized' });
+}
+function requireManage(req, res, next) {
+  if (canManage(req)) return next();
+  res.status(403).json({ error: 'เฉพาะแอดมินหลักเท่านั้น' });
 }
 
 // a character generates one "placement" per selected dungeon (or one null placement if none)
@@ -214,13 +232,50 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
 });
 app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }));
+app.get('/api/admin/can-manage', requireAdmin, (req, res) => res.json({ canManage: canManage(req) }));
+
+// list Discord users who have logged in (so the main admin can grant admin rights)
+app.get('/api/admin/discord-users', requireAdmin, (_req, res) => {
+  const map = {};
+  for (const sid of Object.keys(store.sessions)) {
+    const sess = store.sessions[sid];
+    if (sess && sess.discordId) map[sess.discordId] = sess.name || sess.discordId;
+  }
+  for (const id of (store.adminDiscordIds || [])) if (!map[id]) map[id] = id;
+  for (const id of ADMIN_DISCORD_IDS) if (!map[id]) map[id] = id;
+  const users = Object.keys(map).map((id) => ({
+    discordId: id, name: map[id],
+    isAdmin: isDiscordAdmin(id),
+    isSuper: ADMIN_DISCORD_IDS.includes(id),
+  })).sort((a, b) => (b.isAdmin ? 1 : 0) - (a.isAdmin ? 1 : 0) || String(a.name).localeCompare(String(b.name)));
+  res.json({ enabled: DISCORD_ENABLED, users });
+});
+
+app.post('/api/admin/grant', requireManage, (req, res) => {
+  const { discordId } = req.body || {};
+  if (!discordId) return res.status(400).json({ error: 'discordId required' });
+  if (!store.adminDiscordIds) store.adminDiscordIds = [];
+  if (!store.adminDiscordIds.includes(discordId)) store.adminDiscordIds.push(discordId);
+  logEvent(`ให้สิทธิ์แอดมิน Discord ${discordId}`, req.ip);
+  save();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/revoke', requireManage, (req, res) => {
+  const { discordId } = req.body || {};
+  if (ADMIN_DISCORD_IDS.includes(discordId)) return res.status(400).json({ error: 'ถอดสิทธิ์ super admin (env) ไม่ได้' });
+  store.adminDiscordIds = (store.adminDiscordIds || []).filter((x) => x !== discordId);
+  logEvent(`ถอดสิทธิ์แอดมิน Discord ${discordId}`, req.ip);
+  save();
+  res.json({ ok: true });
+});
 
 // ---------- Discord auth routes ----------
 app.get('/auth/me', (req, res) => {
   const u = currentUser(req);
   res.json({
     enabled: DISCORD_ENABLED,
-    user: u ? { discordId: u.discordId, name: u.name, avatar: u.avatar || '', admin: ADMIN_DISCORD_IDS.includes(u.discordId) } : null,
+    user: u ? { discordId: u.discordId, name: u.name, avatar: u.avatar || '', admin: isDiscordAdmin(u.discordId) } : null,
   });
 });
 
