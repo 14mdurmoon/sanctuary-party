@@ -306,9 +306,11 @@ input::placeholder { color: var(--faint); }
 .slots .empty-hint { color: var(--faint); font-size: .82rem; text-align: center; padding: 14px 4px; border: 1px dashed var(--line); border-radius: 10px; }
 .slots.dropzone { min-height: 90px; }
 /* two sub-team columns (5-5); each is its own drop target */
-.party .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 10px 12px; }
-.party .team-col { padding: 6px; min-height: 70px; border: 1px dashed var(--line-soft); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
-.party .team-col .card { margin-bottom: 0; }
+.party .teams { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 0 10px 12px; }
+.party .team-col { min-width: 0; padding: 6px; min-height: 70px; border: 1px dashed var(--line-soft); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.party .team-col .card { min-width: 0; margin-bottom: 0; gap: 6px; padding: 8px 9px; }
+.party .team-col .card .cp { font-size: .82rem; padding: 2px 7px; }
+.party .team-col .card .acts .icon-btn { width: 26px; height: 26px; font-size: .8rem; }
 .party .team-col .empty-hint { border: none; padding: 20px 4px; }
 .party .team-col:empty::after { content: "ทีมนี้ว่าง"; display: block; text-align: center; color: var(--faint); font-size: .78rem; padding: 20px 4px; }
 
