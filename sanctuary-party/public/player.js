@@ -106,11 +106,18 @@
     mine.forEach((c) => {
       const el = document.createElement('div');
       el.className = 'card' + (c.carry ? ' carry' : '');
+      const parties = partiesOf(c.id);
+      const assignHtml = parties.length
+        ? `<span class="assign-label">อยู่ตี้:</span> ${parties.map((p) => `<span class="tag assigned">${esc(p.name)}</span>`).join(' ')}`
+        : '<span class="muted">ยังไม่ถูกจัดลงตี้</span>';
+      const dgHtml = dungeonTagsHtml(state.groups, c.dungeonIds);
       el.innerHTML = `
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
-          <div class="cn">${esc(c.charName)} ${assignedTags(c.id)}${dungeonTagsHtml(state.groups, c.dungeonIds)}</div>
+          <div class="cn">${esc(c.charName)}</div>
           <div class="pn">${(me.user ? me.user.name : nameOf(c)) ? esc(me.user ? me.user.name : nameOf(c)) + ' · ' : ''}${clsHtml(c.class)}</div>
+          <div class="assign-line">${assignHtml}</div>
+          ${dgHtml ? `<div class="dg-line">${dgHtml}</div>` : ''}
         </div>
         <span class="cp">${nfmt(c.cp)}</span>
         <div class="acts">

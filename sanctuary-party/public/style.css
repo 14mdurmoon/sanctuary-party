@@ -132,6 +132,8 @@ input::placeholder { color: var(--faint); }
 }
 .card .cls-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--violet); box-shadow: 0 0 8px currentColor; }
 .card .idn { min-width: 0; flex: 1; }
+.card .idn .assign-line { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: .74rem; }
+.card .idn .assign-label { color: var(--faint); }
 .card .dg-line { margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px; }
 .card .dg-line .tag { margin-left: 0; }
 .card .idn .cn { font-weight: 700; font-size: .95rem; color: #f1f4ff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
