@@ -13,7 +13,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {}, adminDiscordIds: [] };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {}, adminDiscordIds: [], market: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -28,6 +28,7 @@ try {
   if (!Array.isArray(store.history)) store.history = [];
   if (typeof store.sessions !== 'object' || store.sessions === null) store.sessions = {};
   if (!Array.isArray(store.adminDiscordIds)) store.adminDiscordIds = [];
+  if (!Array.isArray(store.market)) store.market = [];
   if (!store._assignMigrated) {
     for (const c of store.characters) {
       if (c.partyId) {
@@ -626,7 +627,58 @@ app.post('/api/layout', requireAdmin, (req, res) => {
 });
 
 // ---------- static + pages ----------
+// ---------- Market (kina trading) ----------
+app.get('/api/market', (req, res) => {
+  const server = req.query.server === 'Global' ? 'Global' : 'TW';
+  const listings = store.market
+    .filter((m) => m.server === server)
+    .map((m) => ({
+      id: m.id, type: m.type, server: m.server, rate: m.rate, amount: m.amount, note: m.note,
+      ownerName: m.ownerName, discordId: m.discordId, createdAt: m.createdAt, closed: !!m.closed,
+    }));
+  res.json({ listings });
+});
+
+app.post('/api/market', (req, res) => {
+  const u = currentUser(req);
+  if (!u) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบด้วย Discord ก่อนประกาศ' });
+  let { type, server, rate, amount, note } = req.body || {};
+  type = type === 'buy' ? 'buy' : 'sell';
+  server = server === 'Global' ? 'Global' : 'TW';
+  rate = Math.max(0, Number(rate) || 0);
+  amount = String(amount || '').trim().slice(0, 60);
+  note = String(note || '').trim().slice(0, 300);
+  if (!rate) return res.status(400).json({ error: 'กรุณาใส่เรตราคา (บาทต่อ 1M)' });
+  const m = { id: rid(), type, server, rate, amount, note, ownerId: u.discordId, ownerName: u.name, discordId: u.discordId, createdAt: now(), closed: false };
+  store.market.unshift(m);
+  if (store.market.length > 3000) store.market.length = 3000;
+  logEvent(`ประกาศตลาด ${type === 'sell' ? 'ขาย' : 'รับซื้อ'} kina (${server})`, u.name);
+  save();
+  res.json({ id: m.id });
+});
+
+app.post('/api/market/:id/close', (req, res) => {
+  const m = store.market.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const u = currentUser(req);
+  if (!(u && m.ownerId === u.discordId) && !isAdmin(req)) return res.status(403).json({ error: 'จัดการได้เฉพาะประกาศของตัวเอง' });
+  m.closed = !m.closed;
+  save();
+  res.json({ ok: true, closed: m.closed });
+});
+
+app.delete('/api/market/:id', (req, res) => {
+  const m = store.market.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const u = currentUser(req);
+  if (!(u && m.ownerId === u.discordId) && !isAdmin(req)) return res.status(403).json({ error: 'ลบได้เฉพาะประกาศของตัวเอง' });
+  store.market = store.market.filter((x) => x.id !== req.params.id);
+  save();
+  res.json({ ok: true });
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/market', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'market.html')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 
 const PORT = process.env.PORT || 3000;

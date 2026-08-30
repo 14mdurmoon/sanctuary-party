@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sanctuary — ตลาดซื้อขาย Kina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg class="sigil" viewBox="0 0 48 48" fill="none">
+        <path d="M24 3 L30 16 L44 18 L34 28 L37 43 L24 35 L11 43 L14 28 L4 18 L18 16 Z"
+              stroke="#e8c26b" stroke-width="1.6" fill="rgba(232,194,107,.08)"/>
+        <path d="M24 11 L27 19 L24 24 L21 19 Z" fill="#63d6ea"/>
+      </svg>
+      <div>
+        <h1>ตลาด Kina</h1>
+        <p class="sub">ซื้อขายเงิน M ระหว่างผู้เล่น</p>
+      </div>
+    </div>
+    <nav>
+      <span id="authBar"></span>
+      <a class="btn ghost small" href="/">จัดตี้</a>
+    </nav>
+  </header>
+
+  <section class="panel market-panel">
+    <div class="market-toolbar">
+      <div class="seg" id="serverSeg">
+        <button class="seg-btn active" data-server="TW">TW</button>
+        <button class="seg-btn" data-server="Global">Global</button>
+      </div>
+      <div class="seg" id="typeSeg">
+        <button class="seg-btn active" data-type="all">ทั้งหมด</button>
+        <button class="seg-btn" data-type="sell">ขาย</button>
+        <button class="seg-btn" data-type="buy">รับซื้อ</button>
+      </div>
+      <div class="seg" id="sortSeg">
+        <button class="seg-btn active" data-sort="latest">ล่าสุด</button>
+        <button class="seg-btn" data-sort="cheap">ถูกสุด</button>
+      </div>
+      <button class="btn primary small" id="postBtn" style="margin-left:auto">+ ประกาศซื้อ/ขาย</button>
+    </div>
+    <div id="marketList" class="market-list"></div>
+  </section>
+
+  <p class="market-foot">เรตราคาเป็น “บาท ต่อ 1M kina” · ตรวจสอบผู้ขายก่อนโอนเสมอ · ระวังมิจฉาชีพ</p>
+</div>
+<script src="/common.js"></script>
+<script src="/market.js"></script>
+</body>
+</html>
