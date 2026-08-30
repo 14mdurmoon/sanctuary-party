@@ -303,6 +303,27 @@
       if (pn) { pn.value = me.user.name; pn.readOnly = true; pn.title = 'ชื่อจาก Discord'; }
       render();
     }
+    gateSignup();
+  }
+
+  function gateSignup() {
+    const lock = me.enabled && !me.user;
+    ['playerName', 'charName', 'cp', 'cls', 'addBtn'].forEach((id) => { const el = $(id); if (el) el.disabled = lock; });
+    const dg = $('dungeon'); if (dg) dg.querySelectorAll('input').forEach((i) => { i.disabled = lock; });
+    let notice = document.getElementById('signupLock');
+    if (lock) {
+      const btn = $('addBtn');
+      if (!notice && btn) {
+        notice = document.createElement('div');
+        notice.id = 'signupLock';
+        notice.className = 'lock-notice';
+        notice.innerHTML = '🔒 เข้าสู่ระบบด้วย Discord ก่อนลงชื่อตัวละคร<a class="btn small discord-btn" href="/auth/discord">เข้าสู่ระบบด้วย Discord</a>';
+        btn.parentNode.insertBefore(notice, btn);
+      }
+      if (notice) notice.style.display = '';
+    } else if (notice) {
+      notice.style.display = 'none';
+    }
   }
   function renderAuthBar() {
     const nav = document.querySelector('.masthead nav');

@@ -361,6 +361,9 @@ app.post('/api/characters', (req, res) => {
   cp = Math.max(0, parseInt(cp, 10) || 0);
   dungeonIds = cleanDungeonIds(dungeonIds);
   const _user = currentUser(req);
+  if (DISCORD_ENABLED && !_user && !isAdmin(req)) {
+    return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบด้วย Discord ก่อนลงชื่อตัวละคร' });
+  }
   if (_user && !playerName) playerName = String(_user.name || '').trim().slice(0, 40);
   if (!playerName || !charName) {
     return res.status(400).json({ error: 'กรุณากรอกชื่อคนเล่นและชื่อตัวละคร' });
