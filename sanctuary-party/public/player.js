@@ -22,17 +22,16 @@
   const partiesOf = (cid) => state.parties.filter((p) => p.members.some((m) => m.id === cid));
   const assignedTags = (cid) => partiesOf(cid).map((p) => `<span class="tag assigned">${esc(p.name)}</span>`).join(' ');
 
-  // add a link to the Market page in the masthead nav
+  // add a prominent, centered, glowing link to the Market page
   (function marketLink() {
-    const nav = document.querySelector('.masthead nav');
-    if (!nav || document.getElementById('marketLink')) return;
+    const masthead = document.querySelector('.masthead');
+    if (!masthead || document.getElementById('marketLink')) return;
     const a = document.createElement('a');
     a.id = 'marketLink';
-    a.className = 'btn ghost small';
+    a.className = 'market-cta';
     a.href = '/market';
-    a.textContent = 'ตลาด Kina';
-    const adminLink = nav.querySelector('a[href="/admin"]');
-    nav.insertBefore(a, adminLink || null);
+    a.innerHTML = '🪙 ตลาด Kina <span class="cta-badge">ใหม่</span>';
+    masthead.appendChild(a);
   })();
 
   // put the party board ABOVE the full roster so parties are seen first
