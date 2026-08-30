@@ -695,6 +695,21 @@ app.post('/api/market', (req, res) => {
   res.json({ id: m.id });
 });
 
+app.put('/api/market/:id', (req, res) => {
+  const m = store.market.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: 'ไม่พบประกาศ' });
+  const u = currentUser(req);
+  if (!(u && m.ownerId === u.discordId) && !isAdmin(req)) return res.status(403).json({ error: 'แก้ไขได้เฉพาะประกาศของตัวเอง' });
+  let { type, server, rate, amount, note } = req.body || {};
+  if (type !== undefined) m.type = type === 'buy' ? 'buy' : 'sell';
+  if (server !== undefined) m.server = server === 'Global' ? 'Global' : 'TW';
+  if (rate !== undefined) { const r = Math.max(0, Number(rate) || 0); if (r) m.rate = r; }
+  if (amount !== undefined) m.amount = String(amount || '').trim().slice(0, 60);
+  if (note !== undefined) m.note = String(note || '').trim().slice(0, 300);
+  save();
+  res.json({ ok: true });
+});
+
 app.post('/api/market/:id/close', (req, res) => {
   const m = store.market.find((x) => x.id === req.params.id);
   if (!m) return res.status(404).json({ error: 'not found' });

@@ -9,6 +9,11 @@
   let sort = 'latest';
   let listings = [];
 
+  const fmtAmount = (a) => {
+    const raw = String(a || '').trim();
+    const core = raw.replace(/\s*[mM]$/, '').replace(/,/g, '');
+    return /^[\d.]+$/.test(core) ? `${core} M` : raw;
+  };
   const timeAgo = (t) => {
     const s = Math.max(0, (Date.now() - t) / 1000);
     if (s < 60) return 'เมื่อสักครู่';
@@ -117,13 +122,14 @@
           <span class="mk-rate">${nfmt(m.rate)} <small>บาท / 1M</small></span>
           ${m.closed ? '<span class="mk-closed-tag">ปิดแล้ว</span>' : ''}
         </div>
-        ${m.amount ? `<div class="mk-amount">จำนวน: <b>${esc(m.amount)}</b></div>` : ''}
+        ${m.amount ? `<div class="mk-amount">จำนวน: <b>${esc(fmtAmount(m.amount))}</b></div>` : ''}
         ${m.note ? `<div class="mk-note">${esc(m.note)}</div>` : ''}
         <div class="mk-bottom">
           <div class="mk-owner">🎮 ${esc(m.ownerName || '-')} · <span class="mk-time">${timeAgo(m.createdAt)}</span></div>
           <div class="mk-acts">
             ${(!m.closed && !mine) ? `<button class="btn small mk-ping" data-id="${m.id}" title="แจ้งเตือนเจ้าของประกาศว่าคุณสนใจ (มีเสียงเตือนถ้าเขาออนไลน์)">🔔 เรียก</button>` : ''}
             ${m.closed ? '' : `<a class="btn small discord-btn" href="${contact}" target="_blank" rel="noopener">ติดต่อ</a>`}
+            ${canManage ? `<button class="btn ghost small mk-edit" data-id="${m.id}">แก้ไข</button>` : ''}
             ${canManage ? `<button class="btn ghost small mk-close" data-id="${m.id}">${m.closed ? 'เปิดใหม่' : 'ปิด'}</button>` : ''}
             ${canManage ? `<button class="icon-btn mk-del" data-id="${m.id}" title="ลบ">✕</button>` : ''}
           </div>
@@ -142,7 +148,7 @@
       { name: 'type', label: 'ประเภท', type: 'select', value: 'sell',
         options: [{ value: 'sell', label: 'ขาย kina' }, { value: 'buy', label: 'รับซื้อ kina' }] },
       { name: 'rate', label: 'เรตราคา (บาท ต่อ 1M)', type: 'number', value: '' },
-      { name: 'amount', label: 'จำนวน (เช่น 500M หรือ ไม่จำกัด)', value: '' },
+      { name: 'amount', label: 'จำนวน M (เช่น 100 หรือ ไม่จำกัด)', value: '' },
       { name: 'note', label: 'รายละเอียด/เงื่อนไข (ไม่บังคับ)', value: '' },
     ], 'ประกาศ');
     if (!vals) return;
@@ -152,6 +158,20 @@
       toast('ประกาศแล้ว!');
       load();
     } catch (e) { toast(e.message, true); }
+  }
+
+  async function openEdit(m) {
+    const vals = await SP.formModal('แก้ไขประกาศ', [
+      { name: 'type', label: 'ประเภท', type: 'select', value: m.type,
+        options: [{ value: 'sell', label: 'ขาย kina' }, { value: 'buy', label: 'รับซื้อ kina' }] },
+      { name: 'rate', label: 'เรตราคา (บาท ต่อ 1M)', type: 'number', value: m.rate },
+      { name: 'amount', label: 'จำนวน M (เช่น 100 หรือ ไม่จำกัด)', value: m.amount || '' },
+      { name: 'note', label: 'รายละเอียด/เงื่อนไข (ไม่บังคับ)', value: m.note || '' },
+    ], 'บันทึก');
+    if (!vals) return;
+    if (!Number(vals.rate)) { toast('กรุณาใส่เรตราคา', true); return; }
+    try { await api('PUT', `/api/market/${m.id}`, vals); toast('บันทึกแล้ว'); load(); }
+    catch (e) { toast(e.message, true); }
   }
 
   // events
@@ -182,6 +202,8 @@
       setTimeout(() => { ping.disabled = false; }, 3000);
       return;
     }
+    const edit = e.target.closest('.mk-edit');
+    if (edit) { const m = listings.find((x) => x.id === edit.dataset.id); if (m) openEdit(m); return; }
     const close = e.target.closest('.mk-close');
     const del = e.target.closest('.mk-del');
     if (close) {
