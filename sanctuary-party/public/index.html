@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sanctuary — ลงชื่อจัดตี้</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg class="sigil" viewBox="0 0 48 48" fill="none">
+        <path d="M24 3 L30 16 L44 18 L34 28 L37 43 L24 35 L11 43 L14 28 L4 18 L18 16 Z"
+              stroke="#63d6ea" stroke-width="1.6" fill="rgba(99,214,234,.08)"/>
+        <path d="M24 11 L27 19 L24 24 L21 19 Z" fill="#e8c26b"/>
+      </svg>
+      <div>
+        <h1>Sanctuary</h1>
+        <p class="sub">ลงชื่อตัวละคร แล้วรอแอดมินจัดตี้</p>
+      </div>
+    </div>
+    <nav>
+      <span class="live-dot" id="live"><i></i> live</span>
+      <a class="btn ghost small" href="/admin">แอดมิน</a>
+    </nav>
+  </header>
+
+  <div class="cols">
+    <!-- left: signup + my characters -->
+    <div class="stack">
+      <section class="panel">
+        <div class="head"><h2>ลงชื่อตัวละคร</h2></div>
+        <div class="body">
+          <div class="field">
+            <label for="playerName">ชื่อคนเล่น (ไอดี Discord/ชื่อเล่น)</label>
+            <input id="playerName" placeholder="เช่น Nzks" autocomplete="off" />
+          </div>
+          <div class="grid-form">
+            <div class="field full">
+              <label for="charName">ชื่อตัวละคร</label>
+              <input id="charName" placeholder="เช่น 月冥" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="cp">CP</label>
+              <input id="cp" type="number" inputmode="numeric" min="0" placeholder="0" />
+            </div>
+            <div class="field">
+              <label for="cls">คลาส</label>
+              <input id="cls" list="classes" placeholder="เช่น Elementalist" autocomplete="off" />
+              <datalist id="classes">
+                <option>Elementalist</option><option>Gladiator</option><option>Templar</option>
+                <option>Ranger</option><option>Assassin</option><option>Sorcerer</option>
+                <option>Cleric</option><option>Chanter</option><option>Spiritmaster</option><option>Brawler</option>
+              </datalist>
+            </div>
+          </div>
+          <button class="btn primary" id="addBtn" style="width:100%">+ เพิ่มตัวละคร</button>
+          <p class="hint" style="margin:10px 0 0">เพิ่มได้หลายตัว · แก้ไข/ลบได้เฉพาะตัวที่คุณลงจากเครื่องนี้</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="head"><h2>ตัวละครของฉัน</h2></div>
+        <div class="body" id="mine"><p class="empty">ยังไม่ได้ลงชื่อตัวละคร</p></div>
+      </section>
+    </div>
+
+    <!-- right: roster + parties -->
+    <div class="stack">
+      <section class="panel">
+        <div class="head">
+          <h2>รายชื่อทั้งหมด</h2>
+          <span class="eyebrow" id="rosterCount">0 ตัวละคร</span>
+        </div>
+        <div class="body">
+          <div id="roster"><p class="empty">ยังไม่มีใครลงชื่อ</p></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="head">
+          <h2>ตารางตี้ · Sanctuary</h2>
+          <span class="eyebrow" id="partyCount">0 ตี้</span>
+        </div>
+        <div class="body">
+          <div class="board" id="board"><p class="empty">แอดมินยังไม่เปิดตี้</p></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/common.js"></script>
+<script src="/player.js"></script>
+</body>
+</html>
