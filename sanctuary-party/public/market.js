@@ -17,6 +17,59 @@
     return `${Math.floor(s / 86400)} วันที่แล้ว`;
   };
 
+  // ---------- real-time "someone wants to contact you" notifications ----------
+  let audioCtx = null;
+  function unlockAudio() {
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch {}
+    if ('Notification' in window && Notification.permission === 'default') { try { Notification.requestPermission(); } catch {} }
+    window.removeEventListener('pointerdown', unlockAudio);
+  }
+  window.addEventListener('pointerdown', unlockAudio);
+
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+      [[880, 0], [1174, 0.18], [880, 0.36]].forEach(([f, t]) => {
+        const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+        o.connect(g); g.connect(audioCtx.destination); o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, now + t);
+        g.gain.exponentialRampToValueAtTime(0.35, now + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
+        o.start(now + t); o.stop(now + t + 0.18);
+      });
+    } catch {}
+  }
+
+  function showPingBanner(d) {
+    let host = document.getElementById('pingHost');
+    if (!host) { host = document.createElement('div'); host.id = 'pingHost'; document.body.appendChild(host); }
+    const el = document.createElement('div');
+    el.className = 'ping-toast';
+    const what = `${d.listingType === 'sell' ? 'ขาย' : 'รับซื้อ'} ${nfmt(d.rate)} บาท/1M (${d.server})`;
+    const back = d.fromId ? `<a class="btn small discord-btn" href="https://discord.com/users/${encodeURIComponent(d.fromId)}" target="_blank" rel="noopener">ติดต่อกลับ</a>` : '';
+    el.innerHTML = `<div class="ping-ico">🔔</div>
+      <div class="ping-body"><b>${esc(d.fromName)}</b> สนใจประกาศของคุณ<br><span class="ping-what">${esc(what)}</span></div>
+      <div class="ping-acts">${back}<button class="icon-btn ping-x">✕</button></div>`;
+    el.querySelector('.ping-x').onclick = () => el.remove();
+    host.appendChild(el);
+    setTimeout(() => el.remove(), 30000);
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try { new Notification('🔔 มีคนสนใจประกาศของคุณ', { body: `${d.fromName} — ${what}` }); } catch {}
+    }
+  }
+
+  function onPing(d) { beep(); showPingBanner(d); }
+
+  function connectNotify() {
+    if (!me.user || !window.EventSource) return;
+    try {
+      const es = new EventSource('/api/market/notifications');
+      es.onmessage = (ev) => { try { const d = JSON.parse(ev.data); if (d && d.type === 'ping') onPing(d); } catch {} };
+    } catch {}
+  }
+
   async function initAuth() {
     try { me = await api('GET', '/auth/me'); } catch { me = { enabled: false, user: null }; }
     const bar = $('authBar');
@@ -28,6 +81,7 @@
     } else {
       bar.innerHTML = '';
     }
+    if (me.user) connectNotify();
   }
 
   async function load() {
@@ -68,6 +122,7 @@
         <div class="mk-bottom">
           <div class="mk-owner">🎮 ${esc(m.ownerName || '-')} · <span class="mk-time">${timeAgo(m.createdAt)}</span></div>
           <div class="mk-acts">
+            ${(!m.closed && !mine) ? `<button class="btn small mk-ping" data-id="${m.id}" title="แจ้งเตือนเจ้าของประกาศว่าคุณสนใจ (มีเสียงเตือนถ้าเขาออนไลน์)">🔔 เรียก</button>` : ''}
             ${m.closed ? '' : `<a class="btn small discord-btn" href="${contact}" target="_blank" rel="noopener">ติดต่อ</a>`}
             ${canManage ? `<button class="btn ghost small mk-close" data-id="${m.id}">${m.closed ? 'เปิดใหม่' : 'ปิด'}</button>` : ''}
             ${canManage ? `<button class="icon-btn mk-del" data-id="${m.id}" title="ลบ">✕</button>` : ''}
@@ -117,6 +172,16 @@
   });
   $('postBtn').addEventListener('click', openPost);
   $('marketList').addEventListener('click', async (e) => {
+    const ping = e.target.closest('.mk-ping');
+    if (ping) {
+      ping.disabled = true;
+      try {
+        const r = await api('POST', `/api/market/${ping.dataset.id}/ping`);
+        toast(r.online ? 'เรียกแล้ว! เจ้าของประกาศออนไลน์อยู่ 🔔' : 'ส่งแล้ว แต่เจ้าของไม่ออนไลน์ — ลองกด "ติดต่อ" ผ่าน Discord');
+      } catch (err) { toast(err.message, true); }
+      setTimeout(() => { ping.disabled = false; }, 3000);
+      return;
+    }
     const close = e.target.closest('.mk-close');
     const del = e.target.closest('.mk-del');
     if (close) {

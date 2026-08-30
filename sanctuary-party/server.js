@@ -628,6 +628,44 @@ app.post('/api/layout', requireAdmin, (req, res) => {
 
 // ---------- static + pages ----------
 // ---------- Market (kina trading) ----------
+// real-time notifications: poster subscribes; buyers can "ping" a listing
+const marketSubs = new Map(); // discordId -> Set(res)
+function pushMarketNotify(discordId, payload) {
+  const set = marketSubs.get(discordId);
+  if (!set || !set.size) return false;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of set) { try { res.write(data); } catch {} }
+  return true;
+}
+app.get('/api/market/notifications', (req, res) => {
+  const u = currentUser(req);
+  if (!u) return res.status(401).end();
+  res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+  if (res.flushHeaders) res.flushHeaders();
+  res.write(': connected\n\n');
+  let set = marketSubs.get(u.discordId);
+  if (!set) { set = new Set(); marketSubs.set(u.discordId, set); }
+  set.add(res);
+  const ka = setInterval(() => { try { res.write(': ka\n\n'); } catch {} }, 25000);
+  req.on('close', () => { clearInterval(ka); set.delete(res); if (!set.size) marketSubs.delete(u.discordId); });
+});
+
+const marketPingLimit = new Map(); // ip|listingId -> ts
+app.post('/api/market/:id/ping', (req, res) => {
+  const m = store.market.find((x) => x.id === req.params.id);
+  if (!m || m.closed) return res.status(404).json({ error: 'ไม่พบประกาศ' });
+  const key = (req.ip || '') + '|' + m.id;
+  const last = marketPingLimit.get(key) || 0;
+  if (Date.now() - last < 30000) return res.status(429).json({ error: 'เพิ่งเรียกไปเมื่อกี้ รอสักครู่' });
+  marketPingLimit.set(key, Date.now());
+  const u = currentUser(req);
+  const online = pushMarketNotify(m.discordId, {
+    type: 'ping', listingId: m.id, listingType: m.type, rate: m.rate, server: m.server,
+    fromName: u ? u.name : 'ผู้สนใจ', fromId: u ? u.discordId : null, at: Date.now(),
+  });
+  res.json({ ok: true, online });
+});
+
 app.get('/api/market', (req, res) => {
   const server = req.query.server === 'Global' ? 'Global' : 'TW';
   const listings = store.market
