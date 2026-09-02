@@ -13,7 +13,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'sanctuary.json');
 
-let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {}, adminDiscordIds: [], market: [] };
+let store = { characters: [], parties: [], bans: [], groups: [], assignments: {}, history: [], sessions: {}, adminDiscordIds: [], organizerDiscordIds: [], market: [] };
 try {
   store = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   if (!Array.isArray(store.characters)) store.characters = [];
@@ -28,6 +28,7 @@ try {
   if (!Array.isArray(store.history)) store.history = [];
   if (typeof store.sessions !== 'object' || store.sessions === null) store.sessions = {};
   if (!Array.isArray(store.adminDiscordIds)) store.adminDiscordIds = [];
+  if (!Array.isArray(store.organizerDiscordIds)) store.organizerDiscordIds = [];
   if (!Array.isArray(store.market)) store.market = [];
   if (!store._assignMigrated) {
     for (const c of store.characters) {
@@ -55,6 +56,12 @@ try {
     }
     store._teamMigrated = true;
   }
+  if (!store._serverMigrated) {
+    for (const c of store.characters) if (!c.server) c.server = 'TW';
+    for (const g of store.groups) if (!g.server) g.server = 'TW';
+    for (const p of store.parties) if (!p.server) p.server = 'TW';
+    store._serverMigrated = true;
+  }
 } catch { /* fresh store */ }
 
 function save() {
@@ -75,11 +82,14 @@ function logEvent(text, ip) {
 const findChar = (id) => store.characters.find((c) => c.id === id);
 const findParty = (id) => store.parties.find((p) => p.id === id);
 const findGroup = (id) => store.groups.find((g) => g.id === id);
-const cleanDungeonIds = (arr) => {
+const cleanDungeonIds = (arr, server) => {
   if (!Array.isArray(arr)) return [];
   const seen = new Set();
   const out = [];
-  for (const id of arr) { if (id && findGroup(id) && !seen.has(id)) { seen.add(id); out.push(id); } }
+  for (const id of arr) {
+    const g = id && findGroup(id);
+    if (g && (!server || g.server === server) && !seen.has(id)) { seen.add(id); out.push(id); }
+  }
   return out;
 };
 
@@ -135,6 +145,16 @@ function requireManage(req, res, next) {
   if (canManage(req)) return next();
   res.status(403).json({ error: 'เฉพาะแอดมินหลักเท่านั้น' });
 }
+// organizer = can arrange members + edit party time (NOT create/delete/ban). admins are also organizers.
+function isOrganizer(req) {
+  if (isAdmin(req)) return true;
+  const u = currentUser(req);
+  return !!(u && (store.organizerDiscordIds || []).includes(u.discordId));
+}
+function requireOrganizer(req, res, next) {
+  if (isOrganizer(req)) return next();
+  res.status(403).json({ error: 'ไม่มีสิทธิ์จัดตี้' });
+}
 
 // a character generates one "placement" per selected dungeon (or one null placement if none)
 function placementsOf(c) {
@@ -144,6 +164,7 @@ function placementsOf(c) {
     placementId: c.id + '|' + (d || ''),
     id: c.id, playerName: c.playerName, charName: c.charName,
     cp: c.cp, class: c.className, dungeonId: d || null, carry: !!c.carry,
+    server: c.server || 'TW', ownerId: c.ownerId || null,
   }));
 }
 
@@ -170,20 +191,20 @@ function buildState(full) {
       const t = byPartyTeam[p.id] || [[], []];
       const teamA = strip(t[0]);
       const teamB = strip(t[1]);
-      return { id: p.id, name: p.name, groupId: p.groupId || null, startTime: p.startTime, sortOrder: p.sortOrder, teamA, teamB, members: [...teamA, ...teamB] };
+      return { id: p.id, name: p.name, groupId: p.groupId || null, server: p.server || 'TW', startTime: p.startTime, sortOrder: p.sortOrder, teamA, teamB, members: [...teamA, ...teamB] };
     });
   const groups = [...store.groups]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
-    .map((g) => ({ id: g.id, name: g.name }));
+    .map((g) => ({ id: g.id, name: g.name, server: g.server || 'TW' }));
   const characters = store.characters.map((c) => {
-    const base = { id: c.id, charName: c.charName, cp: c.cp, class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry };
-    if (full) { base.playerName = c.playerName; base.ip = c.ip || ''; base.createdAt = c.createdAt || 0; }
+    const base = { id: c.id, charName: c.charName, cp: c.cp, class: c.className, dungeonIds: Array.isArray(c.dungeonIds) ? c.dungeonIds : [], carry: !!c.carry, server: c.server || 'TW' };
+    if (full) { base.playerName = c.playerName; base.ip = c.ip || ''; base.createdAt = c.createdAt || 0; base.ownerId = c.ownerId || null; }
     return base;
   });
   const state = { partySize: PARTY_SIZE, characters, pool: strip(pool), parties, groups };
   if (full) return state;
   // public: scrub player identity (playerName) from everything
-  const scrub = (x) => { const { playerName, ...rest } = x; return rest; };
+  const scrub = (x) => { const { playerName, ownerId, ...rest } = x; return rest; };
   return {
     ...state,
     characters: state.characters.map(scrub),
@@ -233,6 +254,7 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
 });
 app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }));
+app.get('/api/admin/access', requireOrganizer, (req, res) => res.json({ role: isAdmin(req) ? 'admin' : 'organizer', canManage: canManage(req) }));
 app.get('/api/admin/can-manage', requireAdmin, (req, res) => res.json({ canManage: canManage(req) }));
 
 // list Discord users who have logged in (so the main admin can grant admin rights)
@@ -244,11 +266,13 @@ app.get('/api/admin/discord-users', requireAdmin, (_req, res) => {
   }
   for (const id of (store.adminDiscordIds || [])) if (!map[id]) map[id] = id;
   for (const id of ADMIN_DISCORD_IDS) if (!map[id]) map[id] = id;
+  for (const id of (store.organizerDiscordIds || [])) if (!map[id]) map[id] = id;
   const users = Object.keys(map).map((id) => ({
     discordId: id, name: map[id],
     isAdmin: isDiscordAdmin(id),
     isSuper: ADMIN_DISCORD_IDS.includes(id),
-  })).sort((a, b) => (b.isAdmin ? 1 : 0) - (a.isAdmin ? 1 : 0) || String(a.name).localeCompare(String(b.name)));
+    isOrganizer: (store.organizerDiscordIds || []).includes(id),
+  })).sort((a, b) => (b.isAdmin ? 1 : 0) - (a.isAdmin ? 1 : 0) || (b.isOrganizer ? 1 : 0) - (a.isOrganizer ? 1 : 0) || String(a.name).localeCompare(String(b.name)));
   res.json({ enabled: DISCORD_ENABLED, users });
 });
 
@@ -267,6 +291,24 @@ app.post('/api/admin/revoke', requireManage, (req, res) => {
   if (ADMIN_DISCORD_IDS.includes(discordId)) return res.status(400).json({ error: 'ถอดสิทธิ์ super admin (env) ไม่ได้' });
   store.adminDiscordIds = (store.adminDiscordIds || []).filter((x) => x !== discordId);
   logEvent(`ถอดสิทธิ์แอดมิน Discord ${discordId}`, req.ip);
+  save();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/grant-organizer', requireManage, (req, res) => {
+  const { discordId } = req.body || {};
+  if (!discordId) return res.status(400).json({ error: 'discordId required' });
+  if (!store.organizerDiscordIds) store.organizerDiscordIds = [];
+  if (!store.organizerDiscordIds.includes(discordId)) store.organizerDiscordIds.push(discordId);
+  logEvent(`ให้สิทธิ์คนจัดตี้ (organizer) Discord ${discordId}`, req.ip);
+  save();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/revoke-organizer', requireManage, (req, res) => {
+  const { discordId } = req.body || {};
+  store.organizerDiscordIds = (store.organizerDiscordIds || []).filter((x) => x !== discordId);
+  logEvent(`ถอดสิทธิ์คนจัดตี้ Discord ${discordId}`, req.ip);
   save();
   res.json({ ok: true });
 });
@@ -350,17 +392,18 @@ app.get('/api/mine', (req, res) => {
   if (!u) return res.json({ ids: [] });
   res.json({ ids: store.characters.filter((c) => c.ownerId === u.discordId).map((c) => c.id) });
 });
-app.get('/api/admin/state', requireAdmin, (_req, res) => res.json(buildState(true)));
+app.get('/api/admin/state', requireOrganizer, (_req, res) => res.json(buildState(true)));
 app.get('/api/admin/history', requireAdmin, (_req, res) => res.json([...store.history].reverse().slice(0, 200)));
 
 // ---------- characters ----------
 app.post('/api/characters', (req, res) => {
-  let { playerName, charName, cp, class: cls, dungeonIds } = req.body || {};
+  let { playerName, charName, cp, class: cls, dungeonIds, server } = req.body || {};
   playerName = String(playerName || '').trim().slice(0, 40);
   charName = String(charName || '').trim().slice(0, 40);
   cls = String(cls || '').trim().slice(0, 40);
   cp = Math.max(0, parseInt(cp, 10) || 0);
-  dungeonIds = cleanDungeonIds(dungeonIds);
+  server = server === 'Global' ? 'Global' : 'TW';
+  dungeonIds = cleanDungeonIds(dungeonIds, server);
   const _user = currentUser(req);
   if (DISCORD_ENABLED && !_user && !isAdmin(req)) {
     return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบด้วย Discord ก่อนลงชื่อตัวละคร' });
@@ -375,7 +418,7 @@ app.post('/api/characters', (req, res) => {
   }
   const maxOrder = store.characters.reduce((m, c) => Math.max(m, c.slotOrder || 0), 0);
   const ch = {
-    id: rid(), playerName, charName, cp, className: cls, dungeonIds,
+    id: rid(), playerName, charName, cp, className: cls, dungeonIds, server,
     partyId: null, slotOrder: maxOrder + 1, editToken: rid() + rid(), createdAt: now(), ip,
     ownerId: _user ? _user.discordId : null,
   };
@@ -399,7 +442,7 @@ app.put('/api/characters/:id', (req, res) => {
   if (charName !== undefined) c.charName = String(charName).trim().slice(0, 40) || c.charName;
   if (cls !== undefined) c.className = String(cls).trim().slice(0, 40);
   if (cp !== undefined) c.cp = Math.max(0, parseInt(cp, 10) || 0);
-  if (dungeonIds !== undefined) c.dungeonIds = cleanDungeonIds(dungeonIds);
+  if (dungeonIds !== undefined) c.dungeonIds = cleanDungeonIds(dungeonIds, c.server);
   logEvent(`แก้ไขตัวละคร "${c.charName}" — คนเล่น ${c.playerName}`, c.ip);
   save(); broadcast();
   res.json({ ok: true });
@@ -422,7 +465,7 @@ app.delete('/api/characters/:id', (req, res) => {
 });
 
 // toggle "carry" marker (admin only)
-app.post('/api/characters/:id/carry', requireAdmin, (req, res) => {
+app.post('/api/characters/:id/carry', requireOrganizer, (req, res) => {
   const c = findChar(req.params.id);
   if (!c) return res.status(404).json({ error: 'ไม่พบตัวละคร' });
   c.carry = !c.carry;
@@ -508,12 +551,15 @@ app.get('/api/admin/insights', requireAdmin, (_req, res) => {
 
 // ---------- parties (admin only) ----------
 app.post('/api/parties', requireAdmin, (req, res) => {
-  const { name, startTime, groupId } = req.body || {};
+  const { name, startTime, groupId, server } = req.body || {};
+  const grp = (groupId && findGroup(groupId)) ? findGroup(groupId) : null;
+  const sv = grp ? (grp.server || 'TW') : (server === 'Global' ? 'Global' : 'TW');
   const maxOrder = store.parties.reduce((m, p) => Math.max(m, p.sortOrder || 0), 0);
   const p = {
     id: rid(),
     name: String(name || 'ตี้ใหม่').trim().slice(0, 40) || 'ตี้ใหม่',
-    groupId: (groupId && findGroup(groupId)) ? groupId : null,
+    groupId: grp ? groupId : null,
+    server: sv,
     startTime: startTime ? Number(startTime) : null,
     sortOrder: maxOrder + 1, createdAt: now(),
   };
@@ -523,7 +569,7 @@ app.post('/api/parties', requireAdmin, (req, res) => {
   res.json({ id: p.id });
 });
 
-app.put('/api/parties/:id', requireAdmin, (req, res) => {
+app.put('/api/parties/:id', requireOrganizer, (req, res) => {
   const p = findParty(req.params.id);
   if (!p) return res.status(404).json({ error: 'ไม่พบตี้' });
   const { name, startTime, groupId } = req.body || {};
@@ -547,9 +593,10 @@ app.delete('/api/parties/:id', requireAdmin, (req, res) => {
 
 // ---------- groups / categories (admin only) ----------
 app.post('/api/groups', requireAdmin, (req, res) => {
-  const { name } = req.body || {};
+  const { name, server } = req.body || {};
+  const sv = server === 'Global' ? 'Global' : 'TW';
   const maxOrder = store.groups.reduce((m, g) => Math.max(m, g.sortOrder || 0), 0);
-  const g = { id: rid(), name: String(name || 'หมวดใหม่').trim().slice(0, 40) || 'หมวดใหม่', sortOrder: maxOrder + 1, createdAt: now() };
+  const g = { id: rid(), name: String(name || 'หมวดใหม่').trim().slice(0, 40) || 'หมวดใหม่', server: sv, sortOrder: maxOrder + 1, createdAt: now() };
   store.groups.push(g);
   logEvent(`สร้างหมวด "${g.name}"`);
   save(); broadcast();
@@ -596,7 +643,7 @@ app.post('/api/parties/layout', requireAdmin, (req, res) => {
 
 // ---------- drag-drop layout sync (admin only) ----------
 // body: { pool: [charId...], parties: [{ id, memberIds: [charId...] }] }
-app.post('/api/layout', requireAdmin, (req, res) => {
+app.post('/api/layout', requireOrganizer, (req, res) => {
   const { pool = [], parties = [] } = req.body || {};
   const charOf = (placementId) => findChar(String(placementId).split('|')[0]);
   for (const p of parties) {

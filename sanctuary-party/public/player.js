@@ -4,6 +4,8 @@
   const NAME_KEY = 'sanctuary_mynames_v1';
   let owned = {};      // { charId: editToken }
   let state = { pool: [], parties: [], partySize: 10 };
+  let srv = localStorage.getItem('sp_srv') || 'TW';
+  let cat = 'all';
 
   try { owned = JSON.parse(localStorage.getItem(OWN_KEY) || '{}'); } catch { owned = {}; }
   const saveOwned = () => localStorage.setItem(OWN_KEY, JSON.stringify(owned));
@@ -65,6 +67,19 @@
   })();
 
   // inject "จะลงดันไหน" selector into the signup form (kept out of index.html)
+  (function injectServerSel() {
+    if (document.getElementById('charServer')) return;
+    const btn = $('addBtn'); if (!btn) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    wrap.innerHTML = '<label>เซิฟเวอร์</label><div id="charServer" class="seg small"><button type="button" class="seg-btn active" data-sv="TW">TW</button><button type="button" class="seg-btn" data-sv="Global">Global</button></div>';
+    btn.parentNode.insertBefore(wrap, btn);
+    wrap.querySelectorAll('.seg-btn').forEach((b) => { b.onclick = () => {
+      wrap.querySelectorAll('.seg-btn').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active'); populateDungeons();
+    }; });
+  })();
+  const formServer = () => { const a = document.querySelector('#charServer .seg-btn.active'); return a ? a.dataset.sv : 'TW'; };
   (function injectDungeon() {
     if (document.getElementById('dungeon')) return;
     const btn = $('addBtn'); if (!btn) return;
@@ -76,10 +91,10 @@
   function populateDungeons() {
     const cont = $('dungeon'); if (!cont) return;
     const checked = new Set([...cont.querySelectorAll('input:checked')].map((c) => c.value));
-    const groups = state.groups || [];
+    const groups = (state.groups || []).filter((g) => (g.server || 'TW') === formServer());
     cont.innerHTML = groups.length
       ? groups.map((g) => `<label class="dg-chip"><input type="checkbox" value="${g.id}" ${checked.has(g.id) ? 'checked' : ''}><span>${esc(g.name)}</span></label>`).join('')
-      : '<span class="hint">แอดมินยังไม่ตั้งดัน</span>';
+      : '<span class="hint">เซิฟนี้ยังไม่มีดัน</span>';
   }
   const readDungeonIds = () => {
     const cont = $('dungeon');
@@ -96,7 +111,7 @@
     if (!playerName || !charName) { toast('กรอกชื่อคนเล่นและชื่อตัวละคร', true); return; }
     $('addBtn').disabled = true;
     try {
-      const r = await api('POST', '/api/characters', { playerName, charName, cp, class: cls, dungeonIds });
+      const r = await api('POST', '/api/characters', { playerName, charName, cp, class: cls, dungeonIds, server: formServer() });
       owned[r.id] = r.editToken; saveOwned();
       myNames[r.id] = playerName; saveNames();
       $('charName').value = ''; $('cp').value = ''; // keep playerName + class for fast multi-add
@@ -126,7 +141,7 @@
       el.innerHTML = `
         <span class="cls-dot" style="color:${classColor(c.class)}"></span>
         <div class="idn">
-          <div class="cn">${esc(c.charName)}</div>
+          <div class="cn">${esc(c.charName)} <span class="tag srv-tag">${esc(c.server || 'TW')}</span></div>
           <div class="pn">${(me.user ? me.user.name : nameOf(c)) ? esc(me.user ? me.user.name : nameOf(c)) + ' · ' : ''}${clsHtml(c.class)}</div>
           <div class="assign-line">${assignHtml}</div>
           ${dgHtml ? `<div class="dg-line">${dgHtml}</div>` : ''}
@@ -170,10 +185,10 @@
 
   // ---- roster ----
   function renderRoster() {
-    const chars = allChars();
+    const chars = allChars().filter((c) => (c.server || 'TW') === srv);
     $('rosterCount').textContent = `${chars.length} ตัวละคร`;
     const box = $('roster');
-    if (!chars.length) { box.innerHTML = '<p class="empty">ยังไม่มีใครลงชื่อ</p>'; return; }
+    if (!chars.length) { box.innerHTML = '<p class="empty">เซิฟนี้ยังไม่มีใครลงชื่อ</p>'; return; }
     const sorted = [...chars].sort((a, b) => (b.cp || 0) - (a.cp || 0));
     const rows = sorted.map((c) => {
       const tags = assignedTags(c.id);
@@ -244,48 +259,77 @@
   }
 
   function renderBoard() {
-    $('partyCount').textContent = `${state.parties.length} ตี้`;
+    renderTabs();
     const board = $('board');
     board.classList.remove('grouped');
-    if (!state.parties.length) { board.innerHTML = '<p class="empty">แอดมินยังไม่เปิดตี้</p>'; return; }
+
+    const groups = (state.groups || []).filter((g) => (g.server || 'TW') === srv);
+    const parties = (state.parties || []).filter((p) => (p.server || 'TW') === srv);
+    $('partyCount').textContent = `${parties.length} ตี้`;
+    if (!parties.length) { board.innerHTML = '<p class="empty">เซิฟนี้ยังไม่มีตี้</p>'; return; }
     board.innerHTML = '';
 
-    const groups = state.groups || [];
     const byGroup = new Map();
     byGroup.set('none', []);
     groups.forEach((g) => byGroup.set(g.id, []));
-    state.parties.forEach((p) => {
+    parties.forEach((p) => {
       const key = (p.groupId && byGroup.has(p.groupId)) ? p.groupId : 'none';
       byGroup.get(key).push(p);
     });
 
-    // if no categories exist at all, keep the simple wrapping grid
     if (!groups.length) {
       board.classList.remove('sectioned');
-      state.parties.forEach((p) => board.appendChild(buildPartyCard(p)));
+      parties.forEach((p) => board.appendChild(buildPartyCard(p)));
       tickCountdowns();
       return;
     }
     board.classList.add('sectioned');
 
     const makeSection = (gid, title) => {
-      const parties = byGroup.get(gid) || [];
+      const list = byGroup.get(gid) || [];
       const sec = document.createElement('div');
       sec.className = 'party-section' + (gid === 'none' ? ' ungrouped' : '');
       sec.innerHTML = `
         <div class="section-head">
           <span class="section-title">${esc(title)}</span>
-          <span class="section-count">${parties.length} ตี้</span>
+          <span class="section-count">${list.length} ตี้</span>
         </div>
         <div class="section-grid"></div>`;
       const grid = sec.querySelector('.section-grid');
-      parties.forEach((p) => grid.appendChild(buildPartyCard(p)));
+      list.forEach((p) => grid.appendChild(buildPartyCard(p)));
       return sec;
     };
+    const showAll = cat === 'all';
     const ungrouped = byGroup.get('none') || [];
-    if (ungrouped.length) board.appendChild(makeSection('none', 'ยังไม่จัดหมวด'));
-    groups.forEach((g) => board.appendChild(makeSection(g.id, g.name)));
+    if ((showAll || cat === 'none') && ungrouped.length) board.appendChild(makeSection('none', 'ยังไม่จัดหมวด'));
+    groups.forEach((g) => { if (showAll || cat === g.id) board.appendChild(makeSection(g.id, g.name)); });
     tickCountdowns();
+  }
+
+  function ensureTabs() {
+    let tabs = document.getElementById('boardTabs');
+    if (!tabs) {
+      tabs = document.createElement('div');
+      tabs.id = 'boardTabs';
+      const board = $('board');
+      board.parentNode.insertBefore(tabs, board);
+    }
+    return tabs;
+  }
+  function renderTabs() {
+    const tabs = ensureTabs();
+    const groups = (state.groups || []).filter((g) => (g.server || 'TW') === srv);
+    const cats = [{ id: 'all', name: 'ทั้งหมด' }, ...groups, { id: 'none', name: 'ยังไม่จัดหมวด' }];
+    if (!cats.find((c) => c.id === cat)) cat = 'all';
+    tabs.innerHTML = `
+      <div class="server-tabs">
+        ${['TW', 'Global'].map((sv) => `<button class="srv-btn ${sv === srv ? 'active' : ''}" data-srv="${sv}">${sv}</button>`).join('')}
+      </div>
+      <div class="cat-tabs">
+        ${cats.map((c) => `<button class="cat-btn ${c.id === cat ? 'active' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}
+      </div>`;
+    tabs.querySelectorAll('.srv-btn').forEach((b) => { b.onclick = () => { srv = b.dataset.srv; localStorage.setItem('sp_srv', srv); cat = 'all'; renderBoard(); renderRoster(); }; });
+    tabs.querySelectorAll('.cat-btn').forEach((b) => { b.onclick = () => { cat = b.dataset.cat; renderBoard(); }; });
   }
 
   // ---- countdown ticking ----

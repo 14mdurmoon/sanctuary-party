@@ -3,6 +3,10 @@
   const TOKEN_KEY = 'sanctuary_admin_token';
   let token = localStorage.getItem(TOKEN_KEY) || '';
   let state = { pool: [], parties: [], partySize: 10 };
+  let srv = localStorage.getItem('sp_srv') || 'TW';
+  let role = 'admin';
+  let canManage = false;
+  let cat = 'all';
   let dupWarned = false;
   let adminBans = [];
   const allPlacements = () => [...state.pool, ...state.parties.flatMap((p) => p.members)];
@@ -25,8 +29,8 @@
 
   // ---------- auth ----------
   async function tryAuth() {
-    // works with a saved password token OR a Discord-admin session cookie
-    try { await api('GET', '/api/admin/check', null, authHeaders()); return true; }
+    // admin (password/Discord) OR organizer (Discord) may enter
+    try { const r = await api('GET', '/api/admin/access', null, authHeaders()); role = r.role || 'admin'; canManage = !!r.canManage; return true; }
     catch { if (token) { token = ''; localStorage.removeItem(TOKEN_KEY); } return false; }
   }
   async function login() {
@@ -53,7 +57,9 @@
     $('loginPanel').style.display = 'none';
     $('console').style.display = '';
     $('logout').style.display = '';
-    initTools();
+    const consoleEl = $('console');
+    if (role === 'organizer') { consoleEl.classList.add('organizer-mode'); }
+    else { consoleEl.classList.remove('organizer-mode'); initTools(); }
     if (!document.getElementById('bansBar')) {
       const bar = document.createElement('div');
       bar.className = 'bans-bar'; bar.id = 'bansBar'; bar.style.display = 'none';
@@ -85,7 +91,7 @@
     const name = $('pName').value.trim() || 'ตี้ใหม่';
     const startTime = fromLocalInput($('pTime').value);
     try {
-      await api('POST', '/api/parties', { name, startTime }, authHeaders());
+      await api('POST', '/api/parties', { name, startTime, server: srv }, authHeaders());
       $('pName').value = ''; $('pTime').value = '';
       toast('สร้างตี้แล้ว');
     } catch (e) { toast(e.message, true); }
@@ -97,7 +103,7 @@
     const name = $('gName').value.trim();
     if (!name) { toast('ใส่ชื่อหมวด', true); return; }
     try {
-      await api('POST', '/api/groups', { name }, authHeaders());
+      await api('POST', '/api/groups', { name, server: srv }, authHeaders());
       $('gName').value = '';
       toast('สร้างหมวดแล้ว');
     } catch (e) { toast(e.message, true); }
@@ -123,6 +129,9 @@
        </div>
        <span class="cp">${nfmt(pl.cp)}</span>
        <div class="acts">
+         ${pl.ownerId
+           ? `<a class="icon-btn contact" href="https://discord.com/users/${esc(pl.ownerId)}" target="_blank" rel="noopener" title="ติดต่อผ่าน Discord">💬</a>`
+           : '<span class="icon-btn no-dc" title="ไม่ได้ผูก Discord">🚫dc</span>'}
          <button class="icon-btn ban" title="แบน IP คนนี้">🚫</button>
          <button class="icon-btn del" title="ลบตัวละคร (ทุกดัน)">✕</button>
        </div>`;
@@ -133,50 +142,80 @@
     sortables.forEach((s) => s.destroy());
     sortables = [];
 
-    // pool
+    renderTabs();
+
+    // pool (filtered by current server)
     const pool = $('pool');
     pool.innerHTML = '';
-    state.pool.forEach((c) => pool.appendChild(charCard(c, null)));
-    if (!state.pool.length) pool.innerHTML = '<div class="empty-hint">ทุกคนถูกจัดลงตี้แล้ว</div>';
-    $('poolCount').textContent = `${state.pool.length} คน`;
+    const poolItems = state.pool.filter((c) => (c.server || 'TW') === srv);
+    poolItems.forEach((c) => pool.appendChild(charCard(c, null)));
+    if (!poolItems.length) pool.innerHTML = '<div class="empty-hint">ไม่มีคนรอจัดในเซิฟนี้</div>';
+    $('poolCount').textContent = `${poolItems.length} คน`;
 
-    // board = category sections stacked vertically; parties flow in a grid inside each
+    // board = category sections for current server; category tab filters which show
     const board = $('board');
-    $('partyCount').textContent = `${state.parties.length} ตี้`;
     board.innerHTML = '';
     board.classList.add('sectioned');
 
-    const groups = state.groups || [];
+    const groups = (state.groups || []).filter((g) => (g.server || 'TW') === srv);
+    const parties = (state.parties || []).filter((p) => (p.server || 'TW') === srv);
+    $('partyCount').textContent = `${parties.length} ตี้`;
     const byGroup = new Map();
     byGroup.set('none', []);
     groups.forEach((g) => byGroup.set(g.id, []));
-    state.parties.forEach((p) => {
+    parties.forEach((p) => {
       const key = (p.groupId && byGroup.has(p.groupId)) ? p.groupId : 'none';
       byGroup.get(key).push(p);
     });
 
     const makeSection = (gid, title, deletable) => {
-      const parties = byGroup.get(gid) || [];
+      const list = byGroup.get(gid) || [];
       const sec = document.createElement('div');
       sec.className = 'party-section' + (gid === 'none' ? ' ungrouped' : '');
       sec.innerHTML = `
         <div class="section-head">
           <span class="section-title ${deletable ? 'g-edit' : ''}" ${deletable ? `data-gid="${gid}" title="คลิกเพื่อแก้ชื่อหมวด"` : ''}>${esc(title)}</span>
-          <span class="section-count">${parties.length} ตี้</span>
+          <span class="section-count">${list.length} ตี้</span>
           ${deletable ? `<button class="icon-btn del g-del" data-gid="${gid}" title="ลบหมวด">✕</button>` : ''}
         </div>
         <div class="section-grid" data-group="${gid}"></div>`;
       const grid = sec.querySelector('.section-grid');
-      parties.forEach((p) => grid.appendChild(buildPartyCard(p)));
+      list.forEach((p) => grid.appendChild(buildPartyCard(p)));
       return sec;
     };
 
-    // ungrouped first, then each category
-    board.appendChild(makeSection('none', 'ยังไม่จัดหมวด', false));
-    groups.forEach((g) => board.appendChild(makeSection(g.id, g.name, true)));
+    const showAll = cat === 'all';
+    if (showAll || cat === 'none') board.appendChild(makeSection('none', 'ยังไม่จัดหมวด', false));
+    groups.forEach((g) => { if (showAll || cat === g.id) board.appendChild(makeSection(g.id, g.name, true)); });
 
     initSortables();
     tickCountdowns();
+  }
+
+  function ensureTabs() {
+    let tabs = document.getElementById('boardTabs');
+    if (!tabs) {
+      tabs = document.createElement('div');
+      tabs.id = 'boardTabs';
+      const board = $('board');
+      board.parentNode.insertBefore(tabs, board);
+    }
+    return tabs;
+  }
+  function renderTabs() {
+    const tabs = ensureTabs();
+    const groups = (state.groups || []).filter((g) => (g.server || 'TW') === srv);
+    const cats = [{ id: 'all', name: 'ทั้งหมด' }, ...groups, { id: 'none', name: 'ยังไม่จัดหมวด' }];
+    if (!cats.find((c) => c.id === cat)) cat = 'all';
+    tabs.innerHTML = `
+      <div class="server-tabs">
+        ${['TW', 'Global'].map((sv) => `<button class="srv-btn ${sv === srv ? 'active' : ''}" data-srv="${sv}">${sv}</button>`).join('')}
+      </div>
+      <div class="cat-tabs">
+        ${cats.map((c) => `<button class="cat-btn ${c.id === cat ? 'active' : ''}" data-cat="${c.id}">${esc(c.name)}</button>`).join('')}
+      </div>`;
+    tabs.querySelectorAll('.srv-btn').forEach((b) => { b.onclick = () => { srv = b.dataset.srv; localStorage.setItem('sp_srv', srv); cat = 'all'; render(); }; });
+    tabs.querySelectorAll('.cat-btn').forEach((b) => { b.onclick = () => { cat = b.dataset.cat; render(); }; });
   }
 
   function buildPartyCard(p) {
@@ -489,8 +528,12 @@
     if (roles) roles.addEventListener('click', (e) => {
       const g = e.target.closest('.role-grant');
       const r = e.target.closest('.role-revoke');
+      const og = e.target.closest('.org-grant');
+      const orv = e.target.closest('.org-revoke');
       if (g) roleAction('/api/admin/grant', g.dataset.id);
       else if (r) roleAction('/api/admin/revoke', r.dataset.id);
+      else if (og) roleAction('/api/admin/grant-organizer', og.dataset.id);
+      else if (orv) roleAction('/api/admin/revoke-organizer', orv.dataset.id);
     });
   }
 
@@ -522,17 +565,27 @@
     if (!box) return;
     if (!enabled) { box.innerHTML = '<p class="empty">ยังไม่ได้เปิดใช้ Discord login</p>'; return; }
     if (!users.length) { box.innerHTML = '<p class="empty">ยังไม่มีใครเข้าสู่ระบบด้วย Discord</p>'; return; }
-    const rows = users.map((u) => `
-      <tr>
+    const rows = users.map((u) => {
+      const status = u.isAdmin ? '<span class="tag assigned">แอดมิน</span>'
+        : (u.isOrganizer ? '<span class="tag" style="color:#ffcf70;border-color:#5a4a1f">คนจัดตี้</span>' : '<span class="muted">—</span>');
+      let actions = '';
+      if (!u.isSuper) {
+        actions += u.isAdmin
+          ? `<button class="btn ghost small role-revoke" data-id="${esc(u.discordId)}">ถอดแอดมิน</button>`
+          : `<button class="btn small role-grant" data-id="${esc(u.discordId)}">ตั้งแอดมิน</button>`;
+        actions += u.isOrganizer
+          ? ` <button class="btn ghost small org-revoke" data-id="${esc(u.discordId)}">ถอดคนจัดตี้</button>`
+          : ` <button class="btn ghost small org-grant" data-id="${esc(u.discordId)}">ตั้งคนจัดตี้</button>`;
+      }
+      return `<tr>
         <td><b>${esc(u.name)}</b>${u.isSuper ? ' <span class="tag">super</span>' : ''}</td>
         <td class="mono">${esc(u.discordId)}</td>
-        <td>${u.isAdmin ? '<span class="tag assigned">แอดมิน</span>' : '<span class="muted">—</span>'}</td>
-        <td style="text-align:right">${u.isSuper ? '' : (u.isAdmin
-          ? `<button class="btn ghost small role-revoke" data-id="${esc(u.discordId)}">ถอดสิทธิ์</button>`
-          : `<button class="btn small role-grant" data-id="${esc(u.discordId)}">ตั้งเป็นแอดมิน</button>`)}</td>
-      </tr>`).join('');
+        <td>${status}</td>
+        <td style="text-align:right">${actions}</td>
+      </tr>`;
+    }).join('');
     box.innerHTML = `<table class="roster tools-table"><thead><tr><th>Discord</th><th>ID</th><th>สถานะ</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="hint" style="margin-top:8px">ผู้ใช้จะปรากฏที่นี่หลังเข้าสู่ระบบด้วย Discord อย่างน้อย 1 ครั้ง · แอดมินที่ตั้งจะเข้าหน้านี้ได้ด้วยบัญชี Discord</p>`;
+      <p class="hint" style="margin-top:8px">คนจัดตี้ (Organizer) = จัดคนเข้าตี้ + แก้เวลาได้ · สร้าง/ลบตี้ ลบตัวละคร แบน ไม่ได้ · ผู้ใช้จะปรากฏหลังเข้าสู่ระบบด้วย Discord 1 ครั้ง</p>`;
   }
 
   async function roleAction(path, discordId) {
