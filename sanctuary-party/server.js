@@ -736,7 +736,7 @@ app.get('/api/market', (req, res) => {
     .filter((m) => m.server === server)
     .map((m) => ({
       id: m.id, type: m.type, server: m.server, category: m.category || 'kina', title: m.title || '',
-      price: m.price != null ? m.price : (m.rate || 0), amount: m.amount, note: m.note,
+      price: m.price != null ? m.price : (m.rate || 0), amount: m.amount, note: m.note, image: m.image || '',
       ownerName: m.ownerName, discordId: m.discordId, createdAt: m.createdAt, closed: !!m.closed,
     }));
   res.json({ listings });
@@ -753,9 +753,12 @@ app.post('/api/market', (req, res) => {
   title = String(title || '').trim().slice(0, 80);
   amount = String(amount || '').trim().slice(0, 60);
   note = String(note || '').trim().slice(0, 300);
+  let { image } = req.body || {};
+  image = String(image || '').trim().slice(0, 500);
+  if (image && !/^https?:\/\//i.test(image)) image = '';
   if (!price) return res.status(400).json({ error: 'กรุณาใส่ราคา' });
   if (category !== 'kina' && !title) return res.status(400).json({ error: 'กรุณาใส่ชื่อไอเทม/สเปคไอดี' });
-  const m = { id: rid(), type, server, category, title, price, amount, note, ownerId: u.discordId, ownerName: u.name, discordId: u.discordId, createdAt: now(), closed: false };
+  const m = { id: rid(), type, server, category, title, price, amount, note, image, ownerId: u.discordId, ownerName: u.name, discordId: u.discordId, createdAt: now(), closed: false };
   store.market.unshift(m);
   if (store.market.length > 3000) store.market.length = 3000;
   const catTh = category === 'item' ? 'ของในเกม' : category === 'account' ? 'ไอดีเกม' : 'kina';
@@ -777,6 +780,7 @@ app.put('/api/market/:id', (req, res) => {
   if (price !== undefined) { const pr = Math.max(0, Number(price) || 0); if (pr) m.price = pr; }
   if (amount !== undefined) m.amount = String(amount || '').trim().slice(0, 60);
   if (note !== undefined) m.note = String(note || '').trim().slice(0, 300);
+  if (req.body && req.body.image !== undefined) { let img = String(req.body.image || '').trim().slice(0, 500); m.image = /^https?:\/\//i.test(img) ? img : ''; }
   save();
   res.json({ ok: true });
 });

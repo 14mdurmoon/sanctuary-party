@@ -116,7 +116,7 @@
       return sort === 'cheap' ? (a.price - b.price) : (b.createdAt - a.createdAt);
     });
     if (!items.length) {
-      box.innerHTML = `<p class="empty">ยังไม่มีประกาศ ${catLabel(category)} ในเซิฟ ${server} </p>`;
+      box.innerHTML = `<p class="empty">ยังไม่มีประกาศ ${catLabel(category)} ในเซิฟ ${server} — เป็นคนแรกเลยสิ!</p>`;
       return;
     }
     const myId = me.user ? me.user.discordId : null;
@@ -134,6 +134,7 @@
         </div>
         ${m.category !== 'kina' && m.title ? `<div class="mk-title">${esc(m.title)}</div>` : ''}
         ${m.amount ? `<div class="mk-amount">จำนวน: <b>${m.category === 'kina' ? esc(fmtAmount(m.amount)) : esc(m.amount)}</b></div>` : ''}
+        ${m.image ? `<a class="mk-img-wrap" href="${esc(m.image)}" target="_blank" rel="noopener"><img class="mk-img" src="${esc(m.image)}" alt="รูปประกาศ" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.style.display='none'"></a>` : ''}
         ${m.note ? `<div class="mk-note">${esc(m.note)}</div>` : ''}
         <div class="mk-bottom">
           <div class="mk-owner">🎮 ${esc(m.ownerName || '-')} · <span class="mk-time">${timeAgo(m.createdAt)}</span></div>
@@ -164,12 +165,14 @@
         { name: 'title', label: 'ชื่อไอเทม', value: v.title || '' },
         { name: 'price', label: 'ราคา (บาท)', type: 'number', value: v.price || '' },
         { name: 'amount', label: 'จำนวน (ไม่บังคับ)', value: v.amount || '' },
+        { name: 'image', label: 'ลิงก์รูป (ไม่บังคับ · วางลิงก์รูปจาก Discord/Imgur)', value: v.image || '' },
         { name: 'note', label: 'รายละเอียด/เงื่อนไข (ไม่บังคับ)', value: v.note || '' }];
     }
     // account
     return [typeField,
       { name: 'title', label: 'สเปคไอดี (เช่น Elementalist 850cp)', value: v.title || '' },
       { name: 'price', label: 'ราคา (บาท)', type: 'number', value: v.price || '' },
+      { name: 'image', label: 'ลิงก์รูป (ไม่บังคับ · วางลิงก์รูปจาก Discord/Imgur)', value: v.image || '' },
       { name: 'note', label: 'รายละเอียด/เงื่อนไข (ไม่บังคับ)', value: v.note || '' }];
   }
 
