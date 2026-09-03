@@ -481,3 +481,6 @@ input::placeholder { color: var(--faint); }
 .p-group { flex: 1; min-width: 0; background: var(--void-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: .82rem; cursor: pointer; }
 .p-group:hover { border-color: var(--ether-dim); }
 .organizer-mode .p-move { display: none; }
+
+/* ===== market item/account title ===== */
+.mk-title { font-size: 1.02rem; font-weight: 700; color: #f1f4ff; line-height: 1.3; }

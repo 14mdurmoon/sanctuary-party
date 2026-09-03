@@ -30,6 +30,14 @@ try {
   if (!Array.isArray(store.adminDiscordIds)) store.adminDiscordIds = [];
   if (!Array.isArray(store.organizerDiscordIds)) store.organizerDiscordIds = [];
   if (!Array.isArray(store.market)) store.market = [];
+  if (!store._marketMigrated) {
+    for (const m of store.market) {
+      if (!m.category) m.category = 'kina';
+      if (m.price === undefined || m.price === null) m.price = m.rate || 0;
+      if (m.title === undefined) m.title = '';
+    }
+    store._marketMigrated = true;
+  }
   if (!store._assignMigrated) {
     for (const c of store.characters) {
       if (c.partyId) {
@@ -716,7 +724,7 @@ app.post('/api/market/:id/ping', (req, res) => {
   marketPingLimit.set(key, Date.now());
   const u = currentUser(req);
   const online = pushMarketNotify(m.discordId, {
-    type: 'ping', listingId: m.id, listingType: m.type, rate: m.rate, server: m.server,
+    type: 'ping', listingId: m.id, listingType: m.type, category: m.category || 'kina', title: m.title || '', price: m.price != null ? m.price : (m.rate || 0), server: m.server,
     fromName: u ? u.name : 'ผู้สนใจ', fromId: u ? u.discordId : null, at: Date.now(),
   });
   res.json({ ok: true, online });
@@ -727,7 +735,8 @@ app.get('/api/market', (req, res) => {
   const listings = store.market
     .filter((m) => m.server === server)
     .map((m) => ({
-      id: m.id, type: m.type, server: m.server, rate: m.rate, amount: m.amount, note: m.note,
+      id: m.id, type: m.type, server: m.server, category: m.category || 'kina', title: m.title || '',
+      price: m.price != null ? m.price : (m.rate || 0), amount: m.amount, note: m.note,
       ownerName: m.ownerName, discordId: m.discordId, createdAt: m.createdAt, closed: !!m.closed,
     }));
   res.json({ listings });
@@ -736,17 +745,21 @@ app.get('/api/market', (req, res) => {
 app.post('/api/market', (req, res) => {
   const u = currentUser(req);
   if (!u) return res.status(401).json({ error: 'กรุณาเข้าสู่ระบบด้วย Discord ก่อนประกาศ' });
-  let { type, server, rate, amount, note } = req.body || {};
+  let { type, server, category, title, price, amount, note } = req.body || {};
   type = type === 'buy' ? 'buy' : 'sell';
   server = server === 'Global' ? 'Global' : 'TW';
-  rate = Math.max(0, Number(rate) || 0);
+  category = ['kina', 'item', 'account'].includes(category) ? category : 'kina';
+  price = Math.max(0, Number(price) || 0);
+  title = String(title || '').trim().slice(0, 80);
   amount = String(amount || '').trim().slice(0, 60);
   note = String(note || '').trim().slice(0, 300);
-  if (!rate) return res.status(400).json({ error: 'กรุณาใส่เรตราคา (บาทต่อ 1M)' });
-  const m = { id: rid(), type, server, rate, amount, note, ownerId: u.discordId, ownerName: u.name, discordId: u.discordId, createdAt: now(), closed: false };
+  if (!price) return res.status(400).json({ error: 'กรุณาใส่ราคา' });
+  if (category !== 'kina' && !title) return res.status(400).json({ error: 'กรุณาใส่ชื่อไอเทม/สเปคไอดี' });
+  const m = { id: rid(), type, server, category, title, price, amount, note, ownerId: u.discordId, ownerName: u.name, discordId: u.discordId, createdAt: now(), closed: false };
   store.market.unshift(m);
   if (store.market.length > 3000) store.market.length = 3000;
-  logEvent(`ประกาศตลาด ${type === 'sell' ? 'ขาย' : 'รับซื้อ'} kina (${server})`, u.name);
+  const catTh = category === 'item' ? 'ของในเกม' : category === 'account' ? 'ไอดีเกม' : 'kina';
+  logEvent(`ประกาศตลาด ${type === 'sell' ? 'ขาย' : 'รับซื้อ'} ${catTh} (${server})`, u.name);
   save();
   res.json({ id: m.id });
 });
@@ -756,10 +769,12 @@ app.put('/api/market/:id', (req, res) => {
   if (!m) return res.status(404).json({ error: 'ไม่พบประกาศ' });
   const u = currentUser(req);
   if (!(u && m.ownerId === u.discordId) && !isAdmin(req)) return res.status(403).json({ error: 'แก้ไขได้เฉพาะประกาศของตัวเอง' });
-  let { type, server, rate, amount, note } = req.body || {};
+  let { type, server, category, title, price, amount, note } = req.body || {};
   if (type !== undefined) m.type = type === 'buy' ? 'buy' : 'sell';
   if (server !== undefined) m.server = server === 'Global' ? 'Global' : 'TW';
-  if (rate !== undefined) { const r = Math.max(0, Number(rate) || 0); if (r) m.rate = r; }
+  if (category !== undefined) m.category = ['kina', 'item', 'account'].includes(category) ? category : (m.category || 'kina');
+  if (title !== undefined) m.title = String(title || '').trim().slice(0, 80);
+  if (price !== undefined) { const pr = Math.max(0, Number(price) || 0); if (pr) m.price = pr; }
   if (amount !== undefined) m.amount = String(amount || '').trim().slice(0, 60);
   if (note !== undefined) m.note = String(note || '').trim().slice(0, 300);
   save();
