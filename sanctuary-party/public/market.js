@@ -116,7 +116,7 @@
       return sort === 'cheap' ? (a.price - b.price) : (b.createdAt - a.createdAt);
     });
     if (!items.length) {
-      box.innerHTML = `<p class="empty">ยังไม่มีประกาศ ${catLabel(category)} ในเซิฟ ${server} — เป็นคนแรกเลยสิ!</p>`;
+      box.innerHTML = `<p class="empty">ยังไม่มีประกาศ ${catLabel(category)} ในเซิฟ ${server}  เ!</p>`;
       return;
     }
     const myId = me.user ? me.user.discordId : null;
