@@ -153,6 +153,7 @@
     poolItems.forEach((c) => pool.appendChild(charCard(c, null)));
     if (!poolItems.length) pool.innerHTML = '<div class="empty-hint">ไม่มีคนรอจัดในเซิฟนี้</div>';
     $('poolCount').textContent = `${poolItems.length} คน`;
+    filterPool();
 
     // board = category sections for current server; category tab filters which show
     const board = $('board');
@@ -193,6 +194,21 @@
     initSortables();
     tickCountdowns();
   }
+
+  function filterPool() {
+    const el = $('poolSearch');
+    const q = (el && el.value || '').trim().toLowerCase();
+    const pool = $('pool');
+    if (!pool) return;
+    [...pool.children].forEach((card) => {
+      if (!card.dataset || !card.dataset.id) return;
+      card.style.display = (!q || card.textContent.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  }
+  (function wirePoolSearch() {
+    const el = document.getElementById('poolSearch');
+    if (el && !el._wired) { el._wired = true; el.addEventListener('input', filterPool); }
+  })();
 
   function ensureTabs() {
     let tabs = document.getElementById('boardTabs');

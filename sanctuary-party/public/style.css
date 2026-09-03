@@ -354,8 +354,25 @@ input::placeholder { color: var(--faint); }
 .live-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); animation: pulse 2s infinite; }
 .live-dot.off i { background: var(--faint); box-shadow: none; animation: none; }
 
-.cols { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+.cols { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
 .pool-list { min-height: 80px; }
+.pool-search { width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 9px 12px; background: var(--void-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font-family: inherit; font-size: .88rem; }
+.pool-search:focus { outline: none; border-color: var(--ether-dim); }
+/* compact pool cards: name gets full width, actions drop to a second row */
+.pool-list .card {
+  display: grid;
+  grid-template-columns: 14px minmax(0,1fr) auto;
+  grid-template-areas: "dot name cp" "acts acts acts";
+  gap: 4px 8px; align-items: center; padding: 9px 11px;
+}
+.pool-list .card .slot-idx { display: none; }
+.pool-list .card .cls-dot { grid-area: dot; }
+.pool-list .card .idn { grid-area: name; }
+.pool-list .card .cp { grid-area: cp; }
+.pool-list .card .acts { grid-area: acts; justify-content: flex-end; gap: 6px; }
+.pool-list .card .dg-line { margin-top: 2px; }
+.pool-list .card .dg-line .tag { font-size: .64rem; padding: 1px 7px; }
+.pool-list .card .owner-line { font-size: .66rem; margin-top: 1px; }
 
 /* keep the "waiting list" pinned while scrolling down through parties (desktop) */
 @media (min-width: 821px) {
