@@ -6,6 +6,7 @@
   let srv = localStorage.getItem('sp_srv') || 'TW';
   let role = 'admin';
   let canManage = false;
+  let myDiscordId = null;
   let cat = 'all';
   let dupWarned = false;
   let adminBans = [];
@@ -30,7 +31,7 @@
   // ---------- auth ----------
   async function tryAuth() {
     // admin (password/Discord) OR organizer (Discord) may enter
-    try { const r = await api('GET', '/api/admin/access', null, authHeaders()); role = r.role || 'admin'; canManage = !!r.canManage; return true; }
+    try { const r = await api('GET', '/api/admin/access', null, authHeaders()); role = r.role || 'admin'; canManage = !!r.canManage; myDiscordId = r.discordId || null; return true; }
     catch { if (token) { token = ''; localStorage.removeItem(TOKEN_KEY); } return false; }
   }
   async function login() {
@@ -91,7 +92,8 @@
     const name = $('pName').value.trim() || 'ตี้ใหม่';
     const startTime = fromLocalInput($('pTime').value);
     try {
-      await api('POST', '/api/parties', { name, startTime, server: srv }, authHeaders());
+      const gid = (cat !== 'all' && cat !== 'none') ? cat : null;
+      await api('POST', '/api/parties', { name, startTime, server: srv, groupId: gid }, authHeaders());
       $('pName').value = ''; $('pTime').value = '';
       toast('สร้างตี้แล้ว');
     } catch (e) { toast(e.message, true); }
@@ -229,7 +231,7 @@
         <div class="p-title-row">
           <span class="party-handle" title="ลากย้ายหมวด">⠿</span>
           <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ">${esc(p.name)}</span>
-          <button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>
+          ${(role === 'admin' || (p.createdBy && p.createdBy === myDiscordId)) ? `<button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>` : ''}
         </div>
         <div class="p-move">
           <span class="p-move-label">หมวด:</span>

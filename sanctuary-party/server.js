@@ -191,7 +191,7 @@ function buildState(full) {
       const t = byPartyTeam[p.id] || [[], []];
       const teamA = strip(t[0]);
       const teamB = strip(t[1]);
-      return { id: p.id, name: p.name, groupId: p.groupId || null, server: p.server || 'TW', startTime: p.startTime, sortOrder: p.sortOrder, teamA, teamB, members: [...teamA, ...teamB] };
+      return { id: p.id, name: p.name, groupId: p.groupId || null, server: p.server || 'TW', createdBy: p.createdBy || null, startTime: p.startTime, sortOrder: p.sortOrder, teamA, teamB, members: [...teamA, ...teamB] };
     });
   const groups = [...store.groups]
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.createdAt - b.createdAt))
@@ -254,7 +254,7 @@ app.post('/api/admin/login', (req, res) => {
   res.status(401).json({ error: 'รหัสผ่านไม่ถูกต้อง' });
 });
 app.get('/api/admin/check', requireAdmin, (_req, res) => res.json({ ok: true }));
-app.get('/api/admin/access', requireOrganizer, (req, res) => res.json({ role: isAdmin(req) ? 'admin' : 'organizer', canManage: canManage(req) }));
+app.get('/api/admin/access', requireOrganizer, (req, res) => { const u = currentUser(req); res.json({ role: isAdmin(req) ? 'admin' : 'organizer', canManage: canManage(req), discordId: u ? u.discordId : null }); });
 app.get('/api/admin/can-manage', requireAdmin, (req, res) => res.json({ canManage: canManage(req) }));
 
 // list Discord users who have logged in (so the main admin can grant admin rights)
@@ -550,10 +550,11 @@ app.get('/api/admin/insights', requireAdmin, (_req, res) => {
 });
 
 // ---------- parties (admin only) ----------
-app.post('/api/parties', requireAdmin, (req, res) => {
+app.post('/api/parties', requireOrganizer, (req, res) => {
   const { name, startTime, groupId, server } = req.body || {};
   const grp = (groupId && findGroup(groupId)) ? findGroup(groupId) : null;
   const sv = grp ? (grp.server || 'TW') : (server === 'Global' ? 'Global' : 'TW');
+  const _u = currentUser(req);
   const maxOrder = store.parties.reduce((m, p) => Math.max(m, p.sortOrder || 0), 0);
   const p = {
     id: rid(),
@@ -562,6 +563,7 @@ app.post('/api/parties', requireAdmin, (req, res) => {
     server: sv,
     startTime: startTime ? Number(startTime) : null,
     sortOrder: maxOrder + 1, createdAt: now(),
+    createdBy: _u ? _u.discordId : null,
   };
   store.parties.push(p);
   logEvent(`สร้างตี้ "${p.name}"`);
@@ -580,11 +582,18 @@ app.put('/api/parties/:id', requireOrganizer, (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/parties/:id', requireAdmin, (req, res) => {
+app.delete('/api/parties/:id', requireOrganizer, (req, res) => {
+  const dp = findParty(req.params.id);
+  if (!dp) return res.status(404).json({ error: 'ไม่พบตี้' });
+  if (!isAdmin(req)) {
+    const u = currentUser(req);
+    if (!(u && dp.createdBy && dp.createdBy === u.discordId)) {
+      return res.status(403).json({ error: 'ลบได้เฉพาะตี้ที่คุณสร้างเอง' });
+    }
+  }
   for (const k of Object.keys(store.assignments)) {
     if (store.assignments[k] && store.assignments[k].partyId === req.params.id) delete store.assignments[k];
   }
-  const dp = findParty(req.params.id);
   store.parties = store.parties.filter((p) => p.id !== req.params.id);
   logEvent(`ลบตี้ "${dp ? dp.name : ''}"`);
   save(); broadcast();
