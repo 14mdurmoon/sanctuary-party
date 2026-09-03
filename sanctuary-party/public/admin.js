@@ -231,6 +231,13 @@
           <span class="p-name p-edit" data-pid="${p.id}" title="คลิกเพื่อแก้ชื่อ">${esc(p.name)}</span>
           <button class="icon-btn del p-del" data-pid="${p.id}" title="ลบตี้">✕</button>
         </div>
+        <div class="p-move">
+          <span class="p-move-label">หมวด:</span>
+          <select class="p-group" data-pid="${p.id}">
+            <option value="">— ยังไม่จัดหมวด —</option>
+            ${(state.groups || []).filter((g) => (g.server || 'TW') === (p.server || 'TW')).map((g) => `<option value="${g.id}" ${p.groupId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}
+          </select>
+        </div>
         <div class="fill ${full ? 'full' : ''}">
           <div class="bar"><i style="width:${Math.min(100, (n / cap) * 100)}%"></i></div>
           <span class="count"><b>${n}</b>/${cap}</span>
@@ -457,6 +464,12 @@
     if (t) {
       const pid = t.dataset.pid;
       try { await api('PUT', '/api/parties/' + pid, { startTime: fromLocalInput(t.value) }, authHeaders()); toast('ตั้งเวลาแล้ว'); }
+      catch (err) { toast(err.message, true); }
+      return;
+    }
+    const g = e.target.closest('.p-group');
+    if (g) {
+      try { await api('PUT', '/api/parties/' + g.dataset.pid, { groupId: g.value || null }, authHeaders()); toast('ย้ายหมวดแล้ว'); }
       catch (err) { toast(err.message, true); }
     }
   });

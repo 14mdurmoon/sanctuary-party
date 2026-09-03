@@ -475,3 +475,10 @@ input::placeholder { color: var(--faint); }
 .card .acts .contact { text-decoration: none; }
 .card .acts .contact:hover { filter: brightness(1.2); }
 .card .acts .no-dc { font-size: .6rem; color: var(--faint); display: inline-flex; align-items: center; opacity: .6; cursor: help; }
+
+/* ===== party category dropdown (move without dragging) ===== */
+.p-move { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
+.p-move-label { font-size: .76rem; color: var(--faint); white-space: nowrap; }
+.p-group { flex: 1; min-width: 0; background: var(--void-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: .82rem; cursor: pointer; }
+.p-group:hover { border-color: var(--ether-dim); }
+.organizer-mode .p-move { display: none; }
