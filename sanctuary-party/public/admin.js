@@ -1,3 +1,4 @@
+// BUILD_TAG: POOL_DUNGEON_FILTER_2026-09
 (function () {
   const { fmtCountdown, classColor, clsHtml, clericBadge, dungeonTagsHtml, toast, api, connect, esc, nfmt } = SP;
   const TOKEN_KEY = 'sanctuary_admin_token';
@@ -149,9 +150,14 @@
     // pool (filtered by current server)
     const pool = $('pool');
     pool.innerHTML = '';
-    const poolItems = state.pool.filter((c) => (c.server || 'TW') === srv);
+    const poolItems = state.pool.filter((c) => {
+      if ((c.server || 'TW') !== srv) return false;
+      if (cat === 'all') return true;
+      if (cat === 'none') return !c.dungeonId;
+      return c.dungeonId === cat;
+    });
     poolItems.forEach((c) => pool.appendChild(charCard(c, null)));
-    if (!poolItems.length) pool.innerHTML = '<div class="empty-hint">ไม่มีคนรอจัดในเซิฟนี้</div>';
+    if (!poolItems.length) pool.innerHTML = `<div class="empty-hint">${cat === 'all' ? 'ไม่มีคนรอจัดในเซิฟนี้' : 'ไม่มีคนรอจัดในดันนี้'}</div>`;
     $('poolCount').textContent = `${poolItems.length} คน`;
     filterPool();
 
