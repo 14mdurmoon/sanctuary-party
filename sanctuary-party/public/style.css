@@ -506,3 +506,8 @@ input::placeholder { color: var(--faint); }
 .mk-img-wrap { display: block; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
 .mk-img { display: block; width: 100%; max-height: 220px; object-fit: cover; background: var(--void-2); }
 .mk-img-wrap:hover .mk-img { filter: brightness(1.05); }
+
+/* ===== Discord join button ===== */
+.discord-join { display: inline-flex; align-items: center; gap: 7px; background: #5865F2; border: 1px solid #5865F2; color: #fff; }
+.discord-join:hover { background: #4752c4; border-color: #4752c4; text-decoration: none; }
+.discord-join svg { flex: none; }
