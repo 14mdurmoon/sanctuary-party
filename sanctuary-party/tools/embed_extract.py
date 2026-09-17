@@ -6,7 +6,7 @@ OUT_DIR = '_embed_src'
 with open(SERVER, encoding='utf8') as f:
     src = f.read()
 
-pattern = re.compile(r"'((?:[\w./-]+))': \{ type: '([^']+)', b64: '([A-Za-z0-9+/=]+)' \}")
+pattern = re.compile(r"'((?:[\w./-]+))': \{ type: '([^']+)', b64: '([A-Za-z0-9+/=]*)' \}")
 names = []
 for m in pattern.finditer(src):
     name, ctype, b64 = m.group(1), m.group(2), m.group(3)
