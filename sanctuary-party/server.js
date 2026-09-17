@@ -756,6 +756,19 @@ app.post('/api/layout', requireOrganizer, (req, res) => {
 // NCSoft's own character-lookup API is public/unauthenticated but has no CORS
 // headers for other origins, so we fetch it server-side and relay JSON.
 const NC_BASE = 'https://tw.ncsoft.com';
+// NCSoft's search endpoint ignores ?lang and always returns Chinese server
+// names, unlike /character/info — so translate using a table built from
+// /character/info?lang=en (which is authoritative) for every server id.
+const NC_SERVER_NAME_EN = {
+  1001: 'Siel', 1002: 'Nezekan', 1003: 'Vaizel', 1004: 'Kaisinel', 1005: 'Yustiel',
+  1006: 'Ariel', 1007: 'Fregion', 1008: 'Meslamtaeda', 1009: 'Hithanya', 1010: 'Nania',
+  1011: 'Tahavatha', 1012: 'Luteros', 1013: 'Phernos', 1014: 'Daminu', 1015: 'Kasaka',
+  1016: 'Bakarma', 1017: 'Tsenka', 1018: 'Kochi',
+  2001: 'Israphel', 2002: 'Zikel', 2003: 'Triniel', 2004: 'Lumiel', 2005: 'Marchutan',
+  2006: 'Azphel', 2007: 'Ereshkigal', 2008: 'Beritra', 2009: 'Nemon', 2010: 'Hadala',
+  2011: 'Ludra', 2012: 'Ulgorn', 2013: 'Munin', 2014: 'Odar', 2015: 'Zemurru',
+  2016: 'Kromede', 2017: 'Quai', 2018: 'Baba',
+};
 const ncCache = new Map(); // key -> { at, data }
 function ncCacheGet(key, ttlMs) {
   const hit = ncCache.get(key);
@@ -795,8 +808,8 @@ app.get('/api/aion2/search', async (req, res) => {
     // there is no "both" value, so query each faction and merge the results.
     const kw = encodeURIComponent(keyword);
     const [elyos, asmo] = await Promise.all([
-      ncGet(`/aion2/api/search/character?keyword=${kw}&race=1&serverId=&page=1&size=20`),
-      ncGet(`/aion2/api/search/character?keyword=${kw}&race=2&serverId=&page=1&size=20`),
+      ncGet(`/aion2/api/search/character?keyword=${kw}&race=1&serverId=&page=1&size=20&lang=en`),
+      ncGet(`/aion2/api/search/character?keyword=${kw}&race=2&serverId=&page=1&size=20&lang=en`),
     ]);
     const seen = new Set();
     const list = [...(elyos.list || []), ...(asmo.list || [])]
@@ -805,7 +818,7 @@ app.get('/api/aion2/search', async (req, res) => {
         characterId: c.characterId,
         name: String(c.name || '').replace(/<\/?strong>/g, ''),
         serverId: c.serverId,
-        serverName: c.serverName,
+        serverName: NC_SERVER_NAME_EN[c.serverId] || c.serverName,
         level: c.level,
         profileImageUrl: c.profileImageUrl && c.profileImageUrl.startsWith('http') ? c.profileImageUrl : 'https://profileimg.plaync.com' + (c.profileImageUrl || ''),
       }));
@@ -839,7 +852,7 @@ app.get('/api/aion2/character', async (req, res) => {
       const d = detailed[i];
       return d.status === 'fulfilled' ? { ...it, ...d.value } : it;
     });
-    const out = { profile: info.profile, stat: info.stat, equipment };
+    const out = { profile: info.profile, stat: (info.stat && info.stat.statList) || [], equipment };
     ncCacheSet(cacheKey, out);
     res.json(out);
   } catch (e) { res.status(502).json({ error: e.message }); }
