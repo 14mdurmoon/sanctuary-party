@@ -6,7 +6,7 @@ SRC_DIR = '_embed_src'
 with open(SERVER, encoding='utf8') as f:
     src = f.read()
 
-pattern = re.compile(r"('((?:[\w./-]+))': \{ type: '([^']+)', b64: ')([A-Za-z0-9+/=]+)('\s*\})")
+pattern = re.compile(r"('((?:[\w./-]+))': \{ type: '([^']+)', b64: ')([A-Za-z0-9+/=]*)('\s*\})")
 
 def repl(m):
     prefix, name, ctype, _old_b64, suffix = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
